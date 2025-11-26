@@ -1,0 +1,2259 @@
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>Sub Brawl Command</title>
+<style>
+:root{--bg:#020b16;--fg:#d8e4ee;--muted:#8ea3b7;--accent:#1e90ff;--panel:#071425;--card:#0c1a2b;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-monospace,monospace;display:flex;flex-direction:column;height:100vh}
+header{background:#041120;padding:8px 10px}
+header .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,select,button{height:34px;border-radius:7px;border:1px solid #2c3f57;background:#0e1b2a;color:#fff;padding:0 10px}
+button{background:#123a66;border-color:#2c3f57;cursor:pointer}
+button.primary{background:var(--accent);border-color:#2c3f57}
+button.ghost{background:#0e1b2a}
+#mapWrap{position:relative}
+canvas{background:#000;width:100%;height:54vh;touch-action:none;display:block}
+#mapUI{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+#mapUI button{width:38px;height:38px;padding:0}
+#mapUI .pad{display:grid;grid-template-columns:38px 38px 38px;gap:6px;justify-content:center}
+#tabbar{display:flex;gap:8px;background:#061327;border-top:1px solid #132743;padding:6px}
+.tab{flex:1;text-align:center;padding:8px 0;border-radius:8px;background:#0b1930;border:1px solid #1b2f4a;color:#bcd0e4}
+.tab.active{background:#173258;color:#fff}
+#pages{flex:1;overflow:auto;background:var(--panel)}
+.page{display:none;padding:10px}
+.page.active{display:block}
+.section{background:var(--card);border:1px solid #163150;border-radius:10px;padding:10px;margin-bottom:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.label{color:var(--muted);font-size:.9em}
+.small{font-size:.85em;color:#b8c7d6}
+.list{font-size:.9em;line-height:1.4em}
+hr{border:none;border-top:1px solid #17314f;margin:10px 0}
+kbd{background:#0e1b2a;border:1px solid #2c3f57;border-bottom-width:2px;padding:1px 5px;border-radius:5px}
+@media(max-width:700px){canvas{height:48vh}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row">
+    <input id="username" placeholder="username" style="width:110px">
+    <input id="password" type="password" placeholder="password" style="width:110px">
+    <button class="primary" onclick="signup()">Sign up</button>
+    <button onclick="login()">Login</button>
+    <button onclick="spawn()">Spawn</button>
+    <select id="subSelect" onchange="onSelectSub()" style="min-width:180px"><option value="">Select sub...</option></select>
+    <span class="small" id="hudMini">—</span>
+    <button class="ghost" onclick="window.location.href='/leaderboard_ui'">Leaderboard</button>
+  </div>
+</header>
+
+<div id="mapWrap">
+  <canvas id="map"></canvas>
+
+  <!-- Map UI: zoom/pan + grid toggles -->
+  <div id="mapUI">
+    <div class="row" style="gap:6px">
+      <label class="small" style="background:#0e1b2a;padding:4px 6px;border-radius:6px;border:1px solid #2c3f57">
+        <input id="showGrid" type="checkbox" checked> Grid
+      </label>
+      <label class="small" style="background:#0e1b2a;padding:4px 6px;border-radius:6px;border:1px solid #2c3f57">
+        <input id="showGridLabels" type="checkbox" checked> Labels
+      </label>
+    </div>
+    <div class="pad">
+      <div></div>
+      <button class="ghost" onclick="panMap(0,-150)">↑</button>
+      <div></div>
+      <button class="ghost" onclick="panMap(-150,0)">←</button>
+      <button class="ghost" onclick="centerOnMe()">◎</button>
+      <button class="ghost" onclick="panMap(150,0)">→</button>
+      <div></div>
+      <button class="ghost" onclick="panMap(0,150)">↓</button>
+      <div></div>
+      <button class="ghost" onclick="resetView()" title="Reset">⟲</button>
+      <button class="ghost" onclick="zoomMap(1.2)">＋</button>
+      <button class="ghost" onclick="zoomMap(1/1.2)">－</button>
+    </div>
+    <label class="small">Zoom: <span id="zoomRead">1.00</span>×</label>
+  </div>
+
+  <!-- Pitch Control on left side of map -->
+  <div id="pitchControl" style="position:absolute; left:48px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:8px;">
+    <div style="margin-top:20px;">
+      <div style="color:#888; font-size:12px; writing-mode:vertical-rl; text-orientation:mixed; margin-bottom:8px;">PITCH</div>
+      <div id="pitchValue" style="color:#fff; font-size:12px; min-width:30px; text-align:center; margin-bottom:8px;">0°</div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <button onclick="setPitchFromButtons(30)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">↑</button>
+        <button onclick="setPitchFromButtons(15)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">+15°</button>
+        <button onclick="setPitchFromButtons(5)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">+5°</button>
+        <button onclick="setPitchFromButtons(0)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">0°</button>
+        <button onclick="setPitchFromButtons(-5)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">-5°</button>
+        <button onclick="setPitchFromButtons(-15)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">-15°</button>
+        <button onclick="setPitchFromButtons(-30)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">↓</button>
+      </div>
+            <div id="pitchIndicator" style="color:#fff; font-size:14px; font-weight:bold; text-align:center; margin-top:20px;">0°</div>
+    </div>
+</div>
+
+  <!-- Throttle Control to the right of pitch control -->
+  <div id="throttleControl" style="position:absolute; left:100px; top:48%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:8px;">
+    <div style="margin-top:20px;">
+      <div style="color:#888; font-size:12px; writing-mode:vertical-rl; text-orientation:mixed; margin-bottom:8px;">THROTTLE</div>
+      <div id="throttleValue" style="color:#fff; font-size:12px; min-width:30px; text-align:center; margin-bottom:8px;">0%</div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <button onclick="setThrottleFromButtons(100)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">100%</button>
+        <button onclick="setThrottleFromButtons(75)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">75%</button>
+        <button onclick="setThrottleFromButtons(50)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">50%</button>
+        <button onclick="setThrottleFromButtons(25)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">25%</button>
+        <button onclick="setThrottleFromButtons(10)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">10%</button>
+        <button onclick="setThrottleMinSpeed()" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">MIN</button>
+        <button onclick="setThrottleFromButtons(0)" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px;">STOP</button>
+        </div>
+      <div id="speedIndicator" style="color:#fff; font-size:14px; font-weight:bold; text-align:center; margin-top:20px;">0m/s</div>
+        </div>
+      </div>
+
+  <!-- Snorkel Control -->
+  <div id="snorkelControl" style="position:absolute; left:175px; top:calc(48% - 60px); transform:translateY(-50%); display:flex; flex-direction:column; gap:8px;">
+    <div style="margin-top:20px; display:flex; align-items:center; gap:8px;">
+      <button onclick="emergencyBlow()" style="width:60px; height:32px; font-size:10px; background:#5c1a1a; border:1px solid #8a4a4a; color:#fff; border-radius:3px; display:flex; align-items:center; justify-content:center;">BLOW</button>
+      <div id="blowChargeIndicator" style="color:#fff; font-size:12px; font-weight:bold; min-width:30px; text-align:center;">0%</div>
+      <div style="color:#888; font-size:10px; font-weight:bold;">AIR</div>
+        </div>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+      <button onclick="setSnorkelDepth()" style="width:60px; height:32px; font-size:10px; background:#1a3a5c; border:1px solid #4a6b8a; color:#fff; border-radius:3px; display:flex; align-items:center; justify-content:center;">SNORKEL</button>
+        </div>
+  </div>
+
+  <!-- Diesel Toggle Control -->
+  <div id="dieselControl" style="position:absolute; left:180px; top:calc(48% + 20px); transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <div style="margin-top:20px; display:flex; align-items:center; gap:8px;">
+          <button id="dieselToggle" onclick="toggleDiesel()" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px; display:flex; align-items:center; justify-content:center;">DIESEL</button>
+          <div id="batteryIndicator" style="color:#fff; font-size:12px; font-weight:bold; min-width:30px; text-align:center;">0%</div>
+          <div style="color:#888; font-size:10px; font-weight:bold;">BATT</div>
+        </div>
+        <div style="margin-top:6px; color:#ccc; font-size:12px; text-align:center;">
+          <div>Discharge: <span id="dischargeRate">0.0</span>%/s</div>
+          <div>Time left: <span id="timeTillEmpty">∞</span></div>
+      </div>
+    </div>
+
+  <!-- Depth Control -->
+  <div id="depthControl" style="position:absolute; left:165px; top:calc(48% + 100px); transform:translateY(-50%); display:flex; align-items:center; gap:8px;">
+    <div style="margin-top:20px; display:flex; flex-direction:column; align-items:center; gap:8px;">
+      <button id="depthUp" onmousedown="startDepthChange(-1)" onmouseup="stopDepthChange()" onmouseleave="stopDepthChange()" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px; display:flex; align-items:center; justify-content:center;">↑</button>
+      <button id="depthDown" onmousedown="startDepthChange(1)" onmouseup="stopDepthChange()" onmouseleave="stopDepthChange()" style="width:50px; height:28px; font-size:11px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px; display:flex; align-items:center; justify-content:center;">↓</button>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:4px; margin-top:20px;">
+      <div style="color:#888; font-size:12px; text-align:center;">DEPTH</div>
+      <div id="targetDepthIndicator" style="color:#fff; font-size:14px; font-weight:bold; text-align:center;">0m</div>
+      <div style="color:#888; font-size:12px; text-align:center; margin-top:8px;">HEADING</div>
+      <div id="headingIndicator" style="color:#fff; font-size:14px; font-weight:bold; text-align:center;">0°</div>
+    </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tabbar">
+    <div class="tab active" data-page="page-sim">Sub Control</div>
+    <div class="tab" data-page="page-sonar">Sonar & Torpedoes</div>
+  </div>
+
+  <!-- Pages -->
+  <div id="pages">
+    <div class="page active" id="page-sim">
+      <!-- We treat the existing HUD as part of the sim page -->
+      <div class="section">
+        <div id="hud" class="list">—</div>
+      </div>
+      <div class="section">
+        <div class="label">Hazard Scanner</div>
+        <div class="row" style="margin-top:6px">
+          <button class="primary" id="hazardScanToggle" onclick="toggleHazardScan()" style="width:160px;">Hazard Scan: OFF</button>
+          <span class="small" id="weatherScanStatus">—</span>
+        </div>
+        <div class="small" style="margin-top:4px">
+          Shows approximate bearings, ranges, and depths of hazardous fields outside the ring. Plotted as cyan arcs on the map. When ON, the scanner makes your sub noisier on passive sonar.
+        </div>
+        <div id="weatherScanList" class="list" style="margin-top:6px;">—</div>
+      </div>
+      <div class="section">
+        <div class="label">Logistics</div>
+        <div class="row" style="margin-top:6px">
+          <button class="primary" onclick="callFueler()" style="width:160px;">Call Fueler</button>
+          <span class="small" id="fuelerStatus">—</span>
+        </div>
+        <div class="small" style="margin-top:4px">
+          Fuelers appear on the surface 1000–3000m away and are visible to everyone. Stay within 50m at snorkel depth for 2 minutes to refuel.
+        </div>
+        <div class="small" style="margin-top:4px">
+          Nearest fueler: <span id="nearestFuelerRange">—</span>
+        </div>
+        <div class="small" style="margin-top:4px">
+          <label><input type="checkbox" id="fuelerHoldToggle" onchange="toggleFuelerHold()"> Hold fueler at 50m</label>
+        </div>
+        <div class="small" style="margin-top:4px">
+          Refuel timer: <span id="refuelTimerHUD">—</span>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button class="primary" onclick="startRefueling()" style="width:160px;">Start Refueling</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page" id="page-sonar">
+      <!-- Main Sonar Interface -->
+      <div id="sonar">
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+      <div class="section">
+        <div class="label">Contacts</div>
+        <div class="row" style="margin-top:6px">
+          <input id="pingBearing" placeholder="az rel (°)" style="width:110px">
+          <input id="pingBeam" placeholder="beam (°)" style="width:100px" value="25" max="210">
+          <input id="pingRange" placeholder="range (m)" style="width:120px" value="4000" max="6000">
+          <button class="primary" onclick="activePing()">Ping</button>
+          <label class="small" style="margin-left:6px"><input id="showEchoes" type="checkbox" checked> show echoes</label>
+        </div>
+        <div class="small" style="margin-top:4px">Battery cost: <span id="pingBatteryCost">1.1</span>% | Max beam: 210° | Max range: 6000m</div>
+        <hr/>
+        <div class="label">Recent Echoes</div>
+        <div id="echoList" class="list">—</div>
+        <hr/>
+        <div class="label">Recent Bearings</div>
+        <div id="activeBearingList" class="list">—</div>
+        <div class="small" style="margin-top:4px; color:#888;">
+          🚢 submarine • 🚀 torpedo • 📡 ping<br>
+          <span style="color:#ffaa33">■</span> sub • <span style="color:#ff4444">■</span> torp • <span style="color:#44aaff">■</span> ping
+    </div>
+    </div>
+
+
+    <div class="section">
+        <div class="label">Torpedo Control</div>
+      <div class="row" style="margin-top:6px">
+          <button class="primary" onclick="launchTorp()" style="width:100%;">Launch</button>
+      </div>
+      <div class="small" style="margin-top:4px">
+        Ammo: <span id="torpAmmo">—</span> / <span id="torpMagSize">4</span>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button onclick="reloadTorp(1)" style="flex:1; font-size:10px;">Reload 1</button>
+        <button onclick="reloadTorp()" style="flex:1; font-size:10px;">Reload All</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <select id="torpSelect" onchange="onSelectTorp()" style="width:100%">
+          <option value="">Select torpedo...</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <div style="display:flex; width:100%; gap:8px;">
+            <div style="flex:1; text-align:center;">
+              <div style="color:#888; font-size:12px;">HEADING</div>
+              <div id="torpHeadingIndicator" style="color:#fff; font-size:14px; font-weight:bold;">—</div>
+    </div>
+            <div style="flex:1; text-align:center;">
+              <div style="color:#888; font-size:12px;">DEPTH</div>
+              <div id="torpDepthIndicator" style="color:#fff; font-size:14px; font-weight:bold;">—</div>
+            </div>
+          </div>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <button onclick="detonateTorp()" style="background:#b22222;color:#fff; width:100%;">Detonate</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <input id="torpHead" placeholder="heading deg" style="width:100px">
+          <button onclick="torpSetHeading()">Set Hdg</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <input id="torpSpeed" placeholder="speed m/s" style="width:100px">
+          <button onclick="torpSetSpeed()">Set Speed</button>
+      </div>
+      <div class="small" id="torpEnduranceHint" style="margin-top:4px">—</div>
+      <div class="row" style="margin-top:6px">
+          <input id="torpDepth" placeholder="depth m" style="width:100px">
+        <button onclick="torpSetDepth()">Set Depth</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <div class="label" style="font-size:12px">Quick Turns:</div>
+          <button onclick="quickTurn(-30)" style="width:30px; font-size:10px;">L30</button>
+          <button onclick="quickTurn(-15)" style="width:30px; font-size:10px;">L15</button>
+          <button onclick="quickTurn(-5)" style="width:25px; font-size:10px;">L5</button>
+          <button onclick="quickTurn(5)" style="width:25px; font-size:10px;">R5</button>
+          <button onclick="quickTurn(15)" style="width:30px; font-size:10px;">R15</button>
+          <button onclick="quickTurn(30)" style="width:30px; font-size:10px;">R30</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <button id="homingToggle" onclick="toggleHoming()" style="width:80px; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px; font-size:10px;">HOMING</button>
+          <input id="autoPingFreq" placeholder="freq" value="2.0" style="width:60px; font-size:10px;">
+          <button onclick="setAutoPingFreq()" style="width:50px; font-size:10px;">Set</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <button id="torpPassiveToggle" onclick="toggleTorpPassive()" style="width:100%; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px; font-size:10px;">PASSIVE SONAR</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <input id="torpPingRange" placeholder="range (m)" value="6000" style="width:100px">
+          <button onclick="torpPing()" style="background:#0066cc; color:#fff;">PING</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+          <button id="torpPingToggle" onclick="torpPingToggle()" style="width:100%; background:#1a1a1a; border:1px solid #444; color:#fff; border-radius:3px; font-size:10px;">Auto: OFF</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="label">Torpedo Sonar</div>
+        <div class="label">Passive Contacts</div>
+      <div id="torpSonarList" class="list">—</div>
+      <div class="small" style="margin-top:4px; color:#888;">
+        🎯 torpedo detected submarine
+      </div>
+      <hr/>
+        <div class="label">Active Contacts</div>
+      <div id="torpPingList" class="list">—</div>
+      <div class="small" style="margin-top:4px; color:#888;">
+        📡 active ping contacts (range/bearing/depth)
+      </div>
+    </div>
+  </div>
+
+    <div class="page" id="page-leaderboard">
+      <div class="section">
+        <div class="label">Leaderboard</div>
+        <div class="small" style="margin-top:4px;">
+          Showing top players by score (sum of all active submarines).
+        </div>
+        <hr/>
+        <div id="leaderboardList" class="list">No data yet…</div>
+      </div>
+    </div>
+  </div>
+
+</div> <!-- /mapWrap -->
+
+<script>
+/* ---------- State & helpers ---------- */
+const $=id=>document.getElementById(id);
+const API_BASE='';
+let API=null, selected=null, selectedTorp=null;
+let subs=[], torps=[], fuelers=[];
+let lastEchoes=[], passiveContacts=[], torpPingContacts=[];
+let weatherDetections = [];
+let hazardScanEnabled = false;
+let hazardScanTimer = null;
+let fuelerHoldEnabled = false;
+let fuelerHoldTimer = null;
+const ECHO_TTL=20, PASSIVE_TTL=12;
+const DPR = window.devicePixelRatio||1;
+// Keep this in sync with server torpedo.battery.drain_per_mps_per_s
+const TORP_DRAIN_PER_MPS_PER_S = 0.0025;
+
+document.addEventListener('DOMContentLoaded', () => {
+  updateHazardScanButton();
+});
+
+const auth=()=>({'Authorization':'Bearer '+(API||'')});
+function compassDeg(rad){ let d=(90 - rad*180/Math.PI)%360; if(d<0)d+=360; return d; }
+
+function updateTorpSelect(){
+  const sel = $('torpSelect');
+  const keep = sel.value; // Keep current selection
+  sel.innerHTML = '<option value="">Select torpedo...</option>';
+  torps.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    const speedTxt = t.speed != null ? `${t.speed.toFixed(1)} m/s` : 'N/A';
+    const depthTxt = t.depth != null ? `${t.depth.toFixed(0)}m` : 'N/A';
+    const battTxt  = (t.battery != null) ? ` | Batt ${t.battery.toFixed(0)}%` : '';
+    opt.textContent = `${t.id.slice(0,6)} - ${speedTxt} - Depth: ${depthTxt}${battTxt}`;
+    if(t.id === keep) opt.selected = true; // Restore selection
+    sel.appendChild(opt);
+  });
+}
+
+function updateTorpHeadingIndicator() {
+  const indicator = $('torpHeadingIndicator');
+  if (!indicator || !selectedTorp) {
+    if (indicator) indicator.textContent = '—';
+    return;
+  }
+  
+  const torp = torps.find(t => t.id === selectedTorp);
+  if (!torp) {
+    indicator.textContent = '—';
+    return;
+  }
+  
+  // Convert server radians to compass degrees
+  const currentHeading = compassDeg(torp.heading);
+  const targetHeading = torp.target_heading ? compassDeg(torp.target_heading) : null;
+  
+  if (targetHeading) {
+    indicator.textContent = `${currentHeading.toFixed(0)}° → ${targetHeading.toFixed(0)}°`;
+  } else {
+    indicator.textContent = `${currentHeading.toFixed(0)}°`;
+  }
+}
+
+function updateTorpDepthIndicator() {
+  const indicator = $('torpDepthIndicator');
+  if (!indicator || !selectedTorp) {
+    if (indicator) indicator.textContent = '—';
+    return;
+  }
+  
+  const torp = torps.find(t => t.id === selectedTorp);
+  if (!torp) {
+    indicator.textContent = '—';
+    return;
+  }
+  
+  const currentDepth = torp.depth;
+  const targetDepth = torp.target_depth;
+  
+  if (targetDepth !== null) {
+    indicator.textContent = `${currentDepth.toFixed(0)}m → ${targetDepth.toFixed(0)}m`;
+  } else {
+    indicator.textContent = `${currentDepth.toFixed(0)}m`;
+  }
+}
+
+function updateTorpEnduranceHint() {
+  const hint = $('torpEnduranceHint');
+  if (!hint) return;
+  if (!selectedTorp) {
+    hint.textContent = '—';
+    return;
+  }
+  const torp = torps.find(t => t.id === selectedTorp);
+  if (!torp || torp.battery == null || torp.speed == null) {
+    hint.textContent = '—';
+    return;
+  }
+  const batt = Math.max(0, torp.battery);
+  const v = Math.max(0.1, Math.abs(torp.speed));
+  const drainRate = TORP_DRAIN_PER_MPS_PER_S * v * v; // % per second
+  if (drainRate <= 0) {
+    hint.textContent = '—';
+    return;
+  }
+  const seconds = batt / drainRate;
+  const meters = v * seconds;
+  let timeTxt;
+  if (seconds < 60) timeTxt = `${seconds.toFixed(0)}s`;
+  else if (seconds < 3600) timeTxt = `${(seconds/60).toFixed(0)}m`;
+  else timeTxt = `${(seconds/3600).toFixed(1)}h`;
+  hint.textContent = `Est endurance: ~${Math.round(meters)}m (${timeTxt})`;
+}
+
+function onSelectTorp(){
+  selectedTorp = $('torpSelect').value || null;
+  renderTorpSonarList();
+  renderTorpPingList();
+  updateTorpHeadingIndicator();
+  updateTorpDepthIndicator();
+  updateTorpEnduranceHint();
+  
+  // Update toggle button states
+  const torp = torps.find(t => t.id === selectedTorp);
+  if(torp) {
+    updateTorpPingToggleButton(torp.active_sonar_enabled || false);
+    updateHomingToggleButton(torpHomingStates[selectedTorp] || false);
+    updateTorpPassiveToggleButton(torp.passive_sonar_active || false);
+  }
+}
+
+/* ---------- Tabs ---------- */
+[...document.querySelectorAll('#tabbar .tab')].forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('#tabbar .tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('#pages .page').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.page).classList.add('active');
+  });
+});
+
+/* ---------- Weather scanner ---------- */
+async function scanWeather(){
+  const statusEl = $('weatherScanStatus');
+  if(!selected){
+    if(statusEl) statusEl.textContent = 'No submarine selected.';
+    return;
+  }
+  try{
+    const r = await fetch(`/weather_scan/${selected}`, {
+      method: 'POST',
+      headers: {...auth(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json();
+    if(!j.ok){
+      if(statusEl) statusEl.textContent = j.error || 'scan failed';
+      return;
+    }
+    const me = subs.find(s => s.id === selected);
+    const now = performance.now()/1000;
+    const rows = [];
+    weatherDetections = (j.clouds || []).map((c, idx) => {
+      if(me){
+        const wx = me.x + Math.cos(c.bearing) * c.range;
+        const wy = me.y + Math.sin(c.bearing) * c.range;
+        const band = c.depth_band || [0,0];
+        const bearingDeg = c.bearing_deg ?? ((90 - c.bearing * 180 / Math.PI) % 360);
+        rows.push(
+          `#${idx+1} brg ${bearingDeg.toFixed(0)}° rng ${Math.round(c.range)}m ` +
+          `rad ~${Math.round(c.approx_radius||0)}m depth ${Math.round(band[0])}-${Math.round(band[1])}m`
+        );
+        return {
+          x: wx,
+          y: wy,
+          range: c.range,
+          bearing: c.bearing,
+          radius: c.approx_radius,
+          depth_band: c.depth_band,
+          index: idx + 1,
+          time: now
+        };
+      }
+      return null;
+    }).filter(Boolean);
+    if(statusEl){
+      statusEl.textContent = weatherDetections.length
+        ? `Detected ${weatherDetections.length} hazard field(s)`
+        : 'No clouds in range';
+    }
+    const listEl = $('weatherScanList');
+    if(listEl){
+      listEl.innerHTML = rows.length ? rows.join('<br>') : '—';
+    }
+  }catch(e){
+    if(statusEl) statusEl.textContent = 'scan error';
+  }
+}
+
+function updateHazardScanButton() {
+  const btn = $('hazardScanToggle');
+  if (!btn) return;
+  if (hazardScanEnabled) {
+    btn.textContent = 'Hazard Scan: ON';
+    btn.style.background = '#5c5c1a';
+    btn.style.border = '1px solid #8a8a4a';
+  } else {
+    btn.textContent = 'Hazard Scan: OFF';
+    btn.style.background = '#2a2a2a';
+    btn.style.border = '1px solid #555';
+  }
+}
+
+function toggleHazardScan() {
+  hazardScanEnabled = !hazardScanEnabled;
+  if (hazardScanEnabled) {
+    // Fire an immediate scan, then keep scanning periodically
+    scanWeather();
+    if (hazardScanTimer) clearInterval(hazardScanTimer);
+    hazardScanTimer = setInterval(scanWeather, 5000);
+  } else {
+    if (hazardScanTimer) {
+      clearInterval(hazardScanTimer);
+      hazardScanTimer = null;
+    }
+    const statusEl = $('weatherScanStatus');
+    if (statusEl) statusEl.textContent = 'Scanner OFF (stealth)';
+  }
+  updateHazardScanButton();
+}
+
+/* ---------- Leaderboard ---------- */
+async function refreshLeaderboard(){
+  try{
+    const r = await fetch('/leaderboard');
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error||'failed');
+    const rows = j.leaders || [];
+    const html = rows.map(row=>{
+      const name = row.username || ('user:'+row.user_id);
+      const score = (row.score ?? 0).toFixed(0);
+      const kills = row.kills ?? 0;
+      const subs  = row.subs ?? 0;
+      return `#${row.rank} — <b>${name}</b> | score ${score} | kills ${kills} | subs ${subs}`;
+    }).join('<br>');
+    const el = $('leaderboardList');
+    if(el) el.innerHTML = html || 'No players yet.';
+  }catch(e){
+    const el = $('leaderboardList');
+    if(el) el.textContent = 'Error loading leaderboard.';
+  }
+}
+// Refresh leaderboard every 5 seconds while page is open
+setInterval(refreshLeaderboard, 5000);
+// Initial load
+document.addEventListener('DOMContentLoaded', refreshLeaderboard);
+
+/* ---------- Signup/Login/Spawn ---------- */
+async function signup(){
+  const u=$('username').value,p=$('password').value;
+  const r=await fetch(API_BASE+'/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+  const j=await r.json(); if(!j.ok) return alert(j.error);
+  API=j.api_key; connectStream(); alert('Signed up');
+}
+async function login(){
+  const u=$('username').value,p=$('password').value;
+  const r=await fetch(API_BASE+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+  const j=await r.json(); if(!j.ok) return alert(j.error);
+  API=j.api_key; connectStream(); alert('Logged in');
+}
+async function spawn(){
+  const r=await fetch(API_BASE+'/register_sub',{method:'POST',headers:{...auth()}});
+  const j=await r.json(); if(!j.ok) return alert(j.error);
+  selected=j.sub_id; updateSubSelect(); $('subSelect').value=selected; alert('Spawned '+selected.slice(0,8));
+}
+
+/* ---------- Sub select ---------- */
+function updateSubSelect(){
+  const sel=$('subSelect'), keep=sel.value;
+  sel.innerHTML='<option value="">Select sub...</option>';
+  subs.forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.id; o.textContent=`${s.id.slice(0,6)} — d:${s.depth.toFixed(0)}m`;
+    if(s.id===keep) o.selected=true;
+    sel.appendChild(o);
+  });
+  if(!selected && subs.length){ selected=subs[0].id; sel.value=selected; }
+  
+  // Update depth and speed indicators
+  const currentSub = subs.find(s => s.id === selected);
+  if(currentSub) {
+    $('pitchIndicator').textContent = `${(currentSub.pitch * 180 / Math.PI).toFixed(1)}°`;
+    $('speedIndicator').textContent = `${currentSub.speed.toFixed(1)}m/s`;
+            $('targetDepthIndicator').textContent = `${currentSub.depth.toFixed(0)}m${currentSub.target_depth !== null ? ` → ${currentSub.target_depth.toFixed(0)}m` : ''}`;
+            $('headingIndicator').textContent = `${compassDeg(currentSub.heading).toFixed(0)}°${currentSub.target_heading ? ` → ${compassDeg(currentSub.target_heading).toFixed(0)}°` : ''}`;
+            $('blowChargeIndicator').textContent = `${(currentSub.blow_charge * 100).toFixed(0)}%`;
+    
+    // Update battery indicator with color coding
+    const batteryPercent = currentSub.battery.toFixed(0);
+    $('batteryIndicator').textContent = `${batteryPercent}%`;
+    
+            // Color coding based on battery level
+            if (currentSub.battery < 20) {
+              $('batteryIndicator').style.color = '#ff4444'; // Red below 20%
+            } else if (currentSub.battery < 50) {
+              $('batteryIndicator').style.color = '#ffff44'; // Yellow 20-50%
+            } else if (currentSub.battery < 80) {
+              $('batteryIndicator').style.color = '#ffffff'; // White 50-80%
+            } else {
+              $('batteryIndicator').style.color = '#44ff44'; // Green 80-100%
+            }
+  }
+  
+  // Update diesel button color based on submarine state
+  updateDieselButton();
+  
+  // Update blow button color based on submarine state
+  updateBlowButton();
+  
+  // Update discharge rate and time till empty
+  if(currentSub) {
+    updateBatteryDischarge(currentSub);
+  }
+  
+  // Update torpedo ammo HUD for the currently selected sub
+  updateTorpAmmoHUD();
+}
+
+function updateBatteryDischarge(sub) {
+  // Calculate discharge rate based on current operations
+  let dischargeRate = 0.0;
+  
+  // Base discharge rate (idle consumption)
+  dischargeRate += 0.1; // 0.1%/s base consumption
+  
+  // Speed-based consumption (higher speed = more power)
+  if (sub.speed > 0) {
+    dischargeRate += (sub.speed / 12.0) * 0.5; // Up to 0.5%/s at max speed
+  }
+  
+  // Depth-based consumption (deeper = more power for pumps)
+  if (sub.depth > 50) {
+    dischargeRate += (sub.depth - 50) / 1000 * 0.2; // 0.2%/s per 1000m depth
+  }
+  
+  // Snorkeling (charging, so negative discharge)
+  if (sub.is_snorkeling) {
+    dischargeRate -= 2.0; // 2%/s charging rate
+  }
+  
+  // Update discharge rate display
+  $('dischargeRate').textContent = dischargeRate.toFixed(1);
+  
+  // Calculate time till empty
+  let timeTillEmpty = '∞';
+  if (dischargeRate > 0 && sub.battery > 0) {
+    const seconds = sub.battery / dischargeRate;
+    if (seconds < 60) {
+      timeTillEmpty = `${seconds.toFixed(0)}s`;
+    } else if (seconds < 3600) {
+      timeTillEmpty = `${(seconds / 60).toFixed(0)}m`;
+    } else {
+      timeTillEmpty = `${(seconds / 3600).toFixed(1)}h`;
+    }
+  } else if (dischargeRate < 0) {
+    timeTillEmpty = 'Charging';
+  }
+  
+  $('timeTillEmpty').textContent = timeTillEmpty;
+}
+function onSelectSub(){ selected=$('subSelect').value||null; }
+
+/* ---------- Maneuvering actions ---------- */
+async function applyThrottle(){ const t=parseFloat($('throttle').value||'0'); await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({throttle:t})});}
+function quickThr(v){$('throttle').value=v; applyThrottle();}
+async function setRudder(){ const v=parseFloat($('rudder').value||'0'); await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({rudder_deg:v})});}
+async function rudderNudge(d){ await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({rudder_nudge_deg:d})});}
+async function setPlanes(){ const v=parseFloat($('planes').value||'0'); await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({planes:v})});}
+async function setPitchFromButtons(pitchDegrees){ 
+  // Convert pitch degrees to planes value (-1.0 to 1.0)
+  // 30 degrees = 1.0 planes, 0 degrees = 0.0 planes
+  const planesValue = pitchDegrees / 30.0;
+  $('pitchValue').textContent = pitchDegrees.toFixed(0) + '°';
+  
+  if (selected) {
+    await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({planes:planesValue})});
+  }
+}
+async function setThrottleFromSlider(value){ 
+  const throttlePercent = parseFloat(value); 
+  const throttleDecimal = throttlePercent / 100; // Convert percentage to decimal
+  $('throttleValue').textContent = throttlePercent.toFixed(0) + '%';
+  $('throttleSlider').value = throttlePercent; // Update slider position
+  await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({throttle:throttleDecimal})});
+}
+async function setThrottleFromButtons(throttlePercent){ 
+  const throttleDecimal = throttlePercent / 100; // Convert percentage to decimal
+  $('throttleValue').textContent = throttlePercent.toFixed(0) + '%';
+  
+  if (selected) {
+    await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({throttle:throttleDecimal})});
+  }
+}
+async function setThrottleMinSpeed(){ 
+  // Set throttle to maintain minimum speed of 1.8 m/s to prevent sinking
+  // This is approximately 15% throttle based on typical submarine physics
+  const minThrottlePercent = 15;
+  const throttleDecimal = minThrottlePercent / 100;
+  $('throttleValue').textContent = 'MIN';
+  
+  if (selected) {
+    await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({throttle:throttleDecimal})});
+  }
+}
+async function setDepth(){ 
+  const d=parseFloat($('depthTarget').value||''); 
+  await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({target_depth:d, planes:0})});
+  // Update pitch display to show 0° when depth autopilot is active
+  $('pitchValue').textContent = '0°';
+}
+async function clearHold(){ await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({target_depth:null})});}
+async function setSnorkelDepth(){ 
+  // Set depth to 10m and clear pitch for snorkel operation
+  await fetch(`/control/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({target_depth:10, planes:0})});
+  // Update pitch display to show 0° when depth autopilot is active
+  $('pitchValue').textContent = '0°';
+}
+async function toggleDiesel(){ 
+  if (!selected) {
+    console.log('No submarine selected');
+    return;
+  }
+  
+  const sub = subs.find(s => s.id === selected);
+  if (!sub) {
+    console.log('Submarine not found');
+    return;
+  }
+  
+  // Toggle the snorkel state
+  const newSnorkelState = !sub.is_snorkeling;
+  console.log(`Toggling snorkel: current=${sub.is_snorkeling}, new=${newSnorkelState}, depth=${sub.depth.toFixed(1)}m`);
+  
+  try {
+    const response = await fetch(`/snorkel/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({on:newSnorkelState})});
+    const result = await response.json();
+    console.log('Snorkel toggle response:', result);
+  } catch (error) {
+    console.error('Error toggling snorkel:', error);
+  }
+  
+  // Color will be updated by updateDieselButton() based on submarine state
+}
+
+function updateDieselButton() {
+  const button = $('dieselToggle');
+  if (!button || !selected) return;
+  
+  const sub = subs.find(s => s.id === selected);
+  if (!sub) return;
+  
+  const isAtSnorkelDepth = sub.depth >= 0 && sub.depth <= 15; // Snorkel depth range 0-15m
+  const isSnorkeling = sub.is_snorkeling;
+  
+  // Debug logging
+  console.log(`Diesel button update: depth=${sub.depth.toFixed(1)}m, isSnorkeling=${isSnorkeling}, isAtSnorkelDepth=${isAtSnorkelDepth}`);
+  
+  if (isSnorkeling) {
+    // Green when actively snorkeling
+    button.style.background = '#1a3a1a';
+    button.style.border = '1px solid #4a6b4a';
+  } else if (isAtSnorkelDepth) {
+    // Red when at snorkel depth but not snorkeling
+    button.style.background = '#3a1a1a';
+    button.style.border = '1px solid #6b4a4a';
+  } else {
+    // Gray when not at snorkel depth
+    button.style.background = '#2a2a2a';
+    button.style.border = '1px solid #555';
+  }
+}
+
+function updateBlowButton() {
+  const button = document.querySelector('button[onclick="emergencyBlow()"]');
+  if (!button || !selected) return;
+  
+  const sub = subs.find(s => s.id === selected);
+  if (!sub) return;
+  
+  const isBlowCharged = sub.blow_charge >= 1.0; // 100% charge
+  
+  if (isBlowCharged) {
+    // Yellow when fully charged
+    button.style.background = '#5c5c1a';
+    button.style.border = '1px solid #8a8a4a';
+  } else {
+    // Gray when not fully charged
+    button.style.background = '#2a2a2a';
+    button.style.border = '1px solid #555';
+  }
+}
+
+// Depth control with ramping
+let depthChangeInterval = null;
+let depthChangeDirection = 0;
+let depthChangeRate = 0;
+let depthChangeStartTime = 0;
+
+function startDepthChange(direction) {
+  if (!selected) return;
+  
+  depthChangeDirection = direction;
+  depthChangeRate = 30; // Start with 30m per second
+  depthChangeStartTime = Date.now();
+  
+  // Clear any existing interval
+  if (depthChangeInterval) {
+    clearInterval(depthChangeInterval);
+  }
+  
+  // Start the depth change
+  depthChangeInterval = setInterval(updateDepth, 100); // Update every 100ms
+}
+
+function stopDepthChange() {
+  if (depthChangeInterval) {
+    clearInterval(depthChangeInterval);
+    depthChangeInterval = null;
+  }
+  depthChangeDirection = 0;
+  depthChangeRate = 0;
+}
+
+function updateDepth() {
+  if (!selected || depthChangeDirection === 0) return;
+  
+  const sub = subs.find(s => s.id === selected);
+  if (!sub) return;
+  
+  // Calculate ramping rate based on how long button has been held
+  const holdTime = (Date.now() - depthChangeStartTime) / 1000; // seconds
+  // Very aggressive ramping - exponential growth
+  depthChangeRate = Math.min(30 + holdTime * holdTime * 100, 500); // Exponential ramp from 30 to 500 m/s
+  
+  // Calculate new target depth
+  const depthChange = depthChangeDirection * depthChangeRate * 0.1; // 0.1s interval
+  // Always use target_depth if it exists, otherwise use current depth
+  const currentTarget = sub.target_depth !== null ? sub.target_depth : sub.depth;
+  let newTargetDepth = currentTarget + depthChange;
+  
+  // Clamp to 0-500m range
+  newTargetDepth = Math.max(0, Math.min(500, newTargetDepth));
+  
+  // Send the new target depth
+  // Workaround: If target is 0, send 0.1 to ensure autopilot activates
+  const depthToSend = newTargetDepth === 0 ? 0.1 : newTargetDepth;
+  
+  fetch(`/control/${selected}`, {
+    method: 'POST',
+    headers: {...auth(), 'Content-Type': 'application/json'},
+    body: JSON.stringify({target_depth: depthToSend, planes: 0})
+  });
+  
+  // Update pitch display to show 0° when depth autopilot is active
+  $('pitchValue').textContent = '0°';
+}
+
+async function setHeading(deg){ 
+  const heading = deg !== undefined ? deg : parseFloat($('headingTarget').value||''); 
+  if(isNaN(heading)) return;
+  await fetch(`/set_sub_heading/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({heading_deg:heading})});
+}
+async function clearHeading(){ 
+  await fetch(`/set_sub_heading/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({heading_deg:null})});
+}
+async function turnSub(deg){ 
+  const turnDegrees = deg !== undefined ? deg : parseFloat($('turnDegrees').value||''); 
+  if(isNaN(turnDegrees)) return;
+  
+  // Get current submarine heading and add the turn amount
+  const sub = subs.find(s => s.id === selected);
+  if (!sub) return;
+  
+  // Convert current heading from server radians to compass degrees
+  const currentHeading = compassDeg(sub.heading);
+  const newHeading = (currentHeading + turnDegrees) % 360;
+  if (newHeading < 0) newHeading += 360;
+  
+  await fetch(`/set_sub_heading/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({heading_deg:newHeading})});
+}
+async function snorkel(on){ await fetch(`/snorkel/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({on})});}
+async function emergencyBlow(){ await fetch(`/emergency_blow/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'}});}
+
+/* ---------- Sonar actions ---------- */
+async function activePing(){
+  const brg=parseFloat($('pingBearing').value||'0');
+  const beam=parseFloat($('pingBeam').value||'25');
+  const rng=parseFloat($('pingRange').value||'4000');
+  await fetch(`/ping/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},
+    body:JSON.stringify({center_bearing_deg:brg,beamwidth_deg:beam,max_range:rng})});
+}
+async function setPassiveDir(){
+  const v=parseFloat($('passiveDir').value||'0');
+  await fetch(`/set_passive_array/${selected}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({dir_deg:v})});
+}
+
+/* ---------- Torpedoes ---------- */
+function updateTorpAmmoHUD(){
+  const ammoEl = $('torpAmmo');
+  const magEl  = $('torpMagSize');
+  if(!ammoEl || !magEl) return;
+  const sub = subs.find(s => s.id === selected);
+  if(!sub || sub.torpedo_ammo == null){
+    ammoEl.textContent = '—';
+    // Default magazine size 4; kept in sync with server config
+    magEl.textContent  = '4';
+    return;
+  }
+  ammoEl.textContent = sub.torpedo_ammo;
+  // We don't currently get mag size per-sub over the stream; assume 4 by default.
+  magEl.textContent  = magEl.textContent || '4';
+}
+
+async function launchTorp(){
+  const tube = 0; // Default to tube 0
+  const r=await fetch(`/launch_torpedo/${selected}`,{
+    method:'POST',
+    headers:{...auth(),'Content-Type':'application/json'},
+    body:JSON.stringify({tube})
+  });
+  const j=await r.json(); if(!j.ok) return alert(j.error); 
+  selectedTorp = j.torpedo_id;
+  updateTorpSelect();
+  $('torpSelect').value = selectedTorp;
+  // Update ammo HUD using server response if available
+  if($('torpAmmo') && typeof j.torpedo_ammo === 'number'){
+    $('torpAmmo').textContent = j.torpedo_ammo;
+  }
+  if($('torpMagSize') && typeof j.magazine_size === 'number'){
+    $('torpMagSize').textContent = j.magazine_size;
+  }
+}
+
+async function reloadTorp(count){
+  if(!selected){ alert('Select a submarine first'); return; }
+  const body = {};
+  if(typeof count === 'number') body.count = count;
+  const r = await fetch(`/reload_torpedoes/${selected}`,{
+    method:'POST',
+    headers:{...auth(),'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  const j = await r.json();
+  if(!j.ok) return alert(j.error || 'reload failed');
+  // Update HUD from response
+  if($('torpAmmo') && typeof j.torpedo_ammo === 'number'){
+    $('torpAmmo').textContent = j.torpedo_ammo;
+  }
+  if($('torpMagSize') && typeof j.magazine_size === 'number'){
+    $('torpMagSize').textContent = j.magazine_size;
+  }
+  // Also update local sub state so battery HUD stays roughly in sync until next snapshot
+  const sub = subs.find(s => s.id === selected);
+  if(sub){
+    if(typeof j.torpedo_ammo === 'number') sub.torpedo_ammo = j.torpedo_ammo;
+    if(typeof j.battery_remaining === 'number') sub.battery = j.battery_remaining;
+  }
+  updateTorpAmmoHUD();
+  updateSubSelect();
+}
+
+async function torpSetSpeed(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const speed=parseFloat($('torpSpeed').value||'18');
+  await fetch(`/set_torp_speed/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({speed})});
+}
+
+async function torpTurn(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const turn=parseFloat($('torpTurn').value||'0');
+  await fetch(`/set_torp_heading/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({turn_deg:turn,dt:1.0})});
+}
+
+async function torpSetHeading(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const hdg=parseFloat($('torpHead').value||'0');
+  await fetch(`/set_torp_target_heading/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({heading_deg:hdg})});
+  
+  // Update the heading input field to show the target heading
+  $('torpHead').value = hdg.toFixed(0);
+}
+
+async function quickTurn(degrees){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  
+  // Get current torpedo heading and add the turn amount
+  const torp = torps.find(t => t.id === selectedTorp);
+  if (!torp) return;
+  
+  // Convert current heading from server radians to compass degrees
+  const currentHeading = compassDeg(torp.heading);
+  let newHeading = (currentHeading + degrees) % 360;
+  if (newHeading < 0) newHeading += 360;
+  
+  // Update the heading input field
+  $('torpHead').value = newHeading.toFixed(0);
+  
+  // Set the torpedo target heading (auto-steering)
+  await fetch(`/set_torp_target_heading/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({heading_deg:newHeading})});
+}
+
+async function torpSetDepth(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const d=parseFloat($('torpDepth').value||'0');
+  await fetch(`/set_torp_depth/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({depth:d})});
+}
+
+async function torpPing(){
+  console.log('torpPing() called, selectedTorp:', selectedTorp);
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const range=parseFloat($('torpPingRange').value||'800');
+  console.log('Manual torpedo ping:', {torpId: selectedTorp, range: range});
+  
+  // Get torpedo info for debugging
+  const torp = torps.find(t => t.id === selectedTorp);
+  if(torp) {
+    console.log('Manual ping - Torpedo position:', {
+      x: torp.x.toFixed(1),
+      y: torp.y.toFixed(1), 
+      depth: torp.depth.toFixed(1),
+      heading: (torp.heading * 180 / Math.PI).toFixed(1) + '°'
+    });
+    
+    // Check what submarines are available
+    console.log('Manual ping - Available submarines:', subs.map(s => ({
+      id: s.id.slice(0,6),
+      x: s.x.toFixed(1),
+      y: s.y.toFixed(1),
+      depth: s.depth.toFixed(1),
+      distance: Math.sqrt((s.x - torp.x)**2 + (s.y - torp.y)**2 + (s.depth - torp.depth)**2).toFixed(1) + 'm',
+      bearing: (Math.atan2(s.y - torp.y, s.x - torp.x) * 180 / Math.PI).toFixed(1) + '°',
+      relativeBearing: ((Math.atan2(s.y - torp.y, s.x - torp.x) - torp.heading) * 180 / Math.PI).toFixed(1) + '°'
+    })));
+  }
+  
+  const r=await fetch(`/torp_ping/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({max_range:range})});
+  const j=await r.json(); 
+  
+  console.log('Torpedo ping response:', j);
+  
+  if(!j.ok) return alert(j.error||'ping failed');
+  
+  const now=performance.now()/1000;
+  j.contacts.forEach(contact => {
+    console.log('Torpedo ping contact:', contact);
+    torpPingContacts.unshift({
+      torpedo_id: selectedTorp,
+      bearing: contact.bearing,
+      range: contact.range,
+      depth: contact.depth,
+      time: now
+    });
+  });
+  if(torpPingContacts.length>120) torpPingContacts.splice(120);
+  renderTorpPingList();
+}
+
+async function torpPingToggle(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const r=await fetch(`/torp_ping_toggle/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'}});
+  const j=await r.json(); if(!j.ok) return alert(j.error||'toggle failed');
+  updateTorpPingToggleButton(j.active_sonar_enabled);
+}
+
+function updateTorpPingToggleButton(enabled){
+  const btn = $('torpPingToggle');
+  if(btn) {
+    btn.textContent = enabled ? 'Auto: ON' : 'Auto: OFF';
+    btn.style.backgroundColor = enabled ? '#228B22' : '';
+  }
+}
+
+let torpHomingStates = {}; // Track homing state per torpedo
+let torpHomingIntervals = {}; // Track homing intervals per torpedo
+
+// Helper function to wrap angle to [-π, π]
+function wrap_angle(angle) {
+  while (angle > Math.PI) angle -= 2 * Math.PI;
+  while (angle < -Math.PI) angle += 2 * Math.PI;
+  return angle;
+}
+
+async function torpHomingToggle(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const enabled = !torpHomingStates[selectedTorp];
+  torpHomingStates[selectedTorp] = enabled;
+  updateTorpHomingToggleButton(enabled);
+  
+  if(enabled) {
+    startTorpedoHoming(selectedTorp);
+  }
+}
+
+async function toggleHoming(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  
+  const enabled = !torpHomingStates[selectedTorp];
+  torpHomingStates[selectedTorp] = enabled;
+  
+  console.log('Toggling homing:', {selectedTorp, enabled});
+  
+  if(enabled) {
+    // Enable auto-ping for homing
+    try {
+      const response = await fetch(`/torp_ping_toggle/${selectedTorp}`, {
+        method: 'POST',
+        headers: {...auth(), 'Content-Type': 'application/json'}
+      });
+      const result = await response.json();
+      if(result.ok) {
+        console.log('Homing enabled - auto-ping active for torpedo:', selectedTorp.slice(0,6));
+        // Start UI-based homing
+        startUIHoming(selectedTorp);
+      } else {
+        console.error('Failed to enable auto-ping:', result.error);
+        torpHomingStates[selectedTorp] = false; // Revert state
+        return;
+      }
+    } catch(error) {
+      console.error('Failed to enable auto-ping:', error);
+      torpHomingStates[selectedTorp] = false; // Revert state
+      return;
+    }
+  } else {
+    // Stop UI-based homing
+    stopUIHoming(selectedTorp);
+    
+    // Disable auto-ping
+    try {
+      const response = await fetch(`/torp_ping_toggle/${selectedTorp}`, {
+        method: 'POST',
+        headers: {...auth(), 'Content-Type': 'application/json'}
+      });
+      const result = await response.json();
+      if(result.ok) {
+        console.log('Homing disabled - auto-ping stopped for torpedo:', selectedTorp.slice(0,6));
+      }
+    } catch(error) {
+      console.error('Failed to disable auto-ping:', error);
+    }
+  }
+  
+  updateHomingToggleButton(enabled);
+}
+
+async function startUIHoming(torpId) {
+  // Clear any existing homing interval
+  if(torpHomingIntervals[torpId]) {
+    clearInterval(torpHomingIntervals[torpId]);
+  }
+  
+  // Start homing loop every 2 seconds
+  torpHomingIntervals[torpId] = setInterval(() => {
+    performUIHoming(torpId);
+  }, 2000);
+  
+  console.log('Started UI homing for torpedo:', torpId);
+}
+
+function stopUIHoming(torpId) {
+  if(torpHomingIntervals[torpId]) {
+    clearInterval(torpHomingIntervals[torpId]);
+    delete torpHomingIntervals[torpId];
+  }
+  console.log('Stopped UI homing for torpedo:', torpId);
+}
+
+async function performUIHoming(torpId) {
+  console.log('performUIHoming() called for:', torpId?.slice(0,6), 'homing state:', torpHomingStates[torpId]);
+  if(!torpHomingStates[torpId]) return;
+  
+  const torp = torps.find(t => t.id === torpId);
+  if(!torp) {
+    console.log('performUIHoming: torpedo not found:', torpId?.slice(0,6));
+    return;
+  }
+  
+  const now = performance.now() / 1000;
+  
+  // Check for recent torpedo ping contacts (more accurate with depth info)
+  const recentPingContacts = torpPingContacts.filter(c => 
+    c.torpedo_id === torpId && 
+    (now - c.time) <= 5.0 // Within last 5 seconds
+  );
+  
+  if(recentPingContacts.length > 0) {
+    // Use active ping contact for precise targeting
+    const latestPingContact = recentPingContacts.sort((a, b) => b.time - a.time)[0];
+    
+    // Calculate relative bearing from ping contact
+    const targetBearing = latestPingContact.bearing; // Server radians
+    const currentHeading = torp.heading; // Server radians
+    const relativeBearing = wrap_angle(targetBearing - currentHeading); // Server radians
+    
+    // Convert relative bearing to degrees for display
+    const relativeBearingDeg = relativeBearing * 180 / Math.PI;
+    
+    // If relative bearing is close to 0, we're already on target
+    if(Math.abs(relativeBearingDeg) < 5) {
+      console.log('Homing: On target! Relative bearing:', relativeBearingDeg.toFixed(1) + '°');
+    } else {
+      // Calculate new heading to minimize relative bearing
+      const newHeading = wrap_angle(currentHeading + relativeBearing);
+      
+      // Convert from server radians to compass degrees for the API
+      const serverDegrees = newHeading * 180 / Math.PI;
+      const targetHeading = (90 - serverDegrees) % 360;
+      const finalHeading = targetHeading < 0 ? targetHeading + 360 : targetHeading;
+      
+      console.log('Homing: Using ping contact - Relative bearing:', relativeBearingDeg.toFixed(1) + '°, steering to:', finalHeading.toFixed(1) + '°');
+      
+      // Set torpedo heading
+      await fetch(`/set_torp_target_heading/${torpId}`, {
+        method: 'POST',
+        headers: {...auth(), 'Content-Type': 'application/json'},
+        body: JSON.stringify({heading_deg: finalHeading})
+      });
+    }
+    
+    // Set torpedo depth to match target depth
+    if(latestPingContact.depth !== undefined) {
+      await fetch(`/set_torp_depth/${torpId}`, {
+        method: 'POST',
+        headers: {...auth(), 'Content-Type': 'application/json'},
+        body: JSON.stringify({depth: latestPingContact.depth})
+      });
+      
+      console.log('Homing: Matched depth to', latestPingContact.depth.toFixed(1), 'm');
+    }
+    
+  } else {
+    console.log('Homing: No recent ping contacts available');
+  }
+}
+
+function updateHomingToggleButton(enabled) {
+  const button = $('homingToggle');
+  if (enabled) {
+    button.style.background = '#1a3a1a';
+    button.style.border = '1px solid #4a6b4a';
+    button.textContent = 'HOMING ON';
+  } else {
+    button.style.background = '#1a1a1a';
+    button.style.border = '1px solid #444';
+    button.textContent = 'HOMING';
+  }
+}
+
+async function setAutoPingFreq(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const freq = parseFloat($('autoPingFreq').value || '2.0');
+  await fetch(`/set_torp_ping_freq/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'},body:JSON.stringify({ping_frequency:freq})});
+}
+
+async function toggleTorpPassive(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const response = await fetch(`/torp_passive_sonar_toggle/${selectedTorp}`,{method:'POST',headers:{...auth(),'Content-Type':'application/json'}});
+  const result = await response.json();
+  if(result.ok) {
+    updateTorpPassiveToggleButton(result.passive_sonar_active);
+  }
+}
+
+function updateTorpPassiveToggleButton(enabled) {
+  const button = $('torpPassiveToggle');
+  if (enabled) {
+    button.style.background = '#1a3a1a';
+    button.style.border = '1px solid #4a6b4a';
+    button.textContent = 'PASSIVE SONAR ON';
+  } else {
+    button.style.background = '#1a1a1a';
+    button.style.border = '1px solid #444';
+    button.textContent = 'PASSIVE SONAR OFF';
+  }
+}
+
+async function startTorpedoHoming(torpId) {
+  if(!torpHomingStates[torpId]) return;
+  
+  const now = performance.now()/1000;
+  
+  // Try active ping contact first (more accurate)
+  let targetBearing = null;
+  let targetDepth = null;
+  
+  const pingContact = torpPingContacts
+    .filter(c => c.torpedo_id === torpId && (now - c.time) <= 10)
+    .sort((a, b) => b.time - a.time)[0];
+  
+  if(pingContact) {
+    // Use ping data for precise targeting
+    const torp = torps.find(t => t.id === torpId);
+    if(torp) {
+      targetBearing = Math.atan2(
+        torp.y + Math.sin(pingContact.bearing) * pingContact.range - torp.y,
+        torp.x + Math.cos(pingContact.bearing) * pingContact.range - torp.x
+      );
+      targetDepth = pingContact.depth;
+    }
+  } else {
+    // Fall back to passive sonar bearing
+    const passiveContact = passiveContacts
+      .filter(c => c.torpedo_id === torpId && c.contact_type.startsWith('torpedo_') && (now - c.time) <= 10)
+      .sort((a, b) => b.time - a.time)[0];
+    
+    if(passiveContact) {
+      targetBearing = passiveContact.bearing;
+      // No depth info from passive, maintain current depth
+      const torp = torps.find(t => t.id === torpId);
+      targetDepth = torp ? torp.depth : null;
+    }
+  }
+  
+  if(targetBearing !== null) {
+    const targetHeadingDeg = (targetBearing * 180 / Math.PI);
+    
+    try {
+      await fetch(`/set_torp_heading/${torpId}`, {
+        method: 'POST',
+        headers: {...auth(), 'Content-Type': 'application/json'},
+        body: JSON.stringify({heading_deg: targetHeadingDeg, dt: 1.0})
+      });
+      
+      if(targetDepth !== null) {
+        await fetch(`/set_torp_depth/${torpId}`, {
+          method: 'POST', 
+          headers: {...auth(), 'Content-Type': 'application/json'},
+          body: JSON.stringify({depth: targetDepth})
+        });
+      }
+    } catch(e) {
+      console.log('Homing command failed:', e);
+    }
+  }
+  
+  // Continue homing every 2 seconds
+  if(torpHomingStates[torpId]) {
+    setTimeout(() => startTorpedoHoming(torpId), 2000);
+  }
+}
+
+function updateTorpHomingToggleButton(enabled){
+  const btn = $('torpHomingToggle');
+  if(btn) {
+    btn.textContent = enabled ? 'Homing: ON' : 'Homing: OFF';
+    btn.style.backgroundColor = enabled ? '#ff6600' : '';
+  }
+}
+
+async function detonateTorp(){
+  if(!selectedTorp){ alert('Select a torpedo first'); return; }
+  const r = await fetch('/detonate/' + selectedTorp, { method:'POST', headers:{...auth(),'Content-Type':'application/json'} });
+  const j = await r.json(); if(!j.ok) return alert(j.error||'detonate failed'); 
+  alert('Detonated — affected: '+(j.affected||0));
+  selectedTorp = null;
+  updateTorpSelect();
+}
+
+/* ---------- Stream ---------- */
+function connectStream(){
+  const es=new EventSource('/stream?api_key='+API);
+  es.addEventListener('snapshot', e=>{
+    const d=JSON.parse(e.data); subs=d.subs||[]; torps=d.torpedoes||[]; fuelers=d.fuelers||[];
+    updateSubSelect(); updateTorpSelect(); updateTorpHeadingIndicator(); updateTorpDepthIndicator(); updateTorpEnduranceHint(); renderMiniHUD(); renderEchoList(); renderActiveBearingList(); renderPassiveList(); renderTorpList(); renderTorpSonarList(); renderTorpPingList();
+    updateTorpAmmoHUD();
+    updateNearestFuelerRange();
+    updateRefuelTimerHUD();
+  });
+  es.addEventListener('echo', e=>{
+    const d=JSON.parse(e.data); d.time=performance.now()/1000;
+    lastEchoes.unshift(d); if(lastEchoes.length>80) lastEchoes.pop();
+    renderEchoList(); renderActiveBearingList();
+  });
+  es.addEventListener('contact', e=>{
+    const c=JSON.parse(e.data);
+    if(c.type==='passive' || c.type==='active_ping_detected') {
+      c.time=performance.now()/1000;
+      if(c.type==='active_ping_detected') c.contact_type='ping';
+      passiveContacts.unshift(c); if(passiveContacts.length>120) passiveContacts.pop();
+      renderPassiveList();
+      renderActiveBearingList(); // Update recent bearings with new passive contacts
+    }
+  });
+  es.addEventListener('torpedo_contact', e=>{
+    const c=JSON.parse(e.data);
+    c.time=performance.now()/1000;
+    // Add torpedo prefix to distinguish from sub contacts
+    c.contact_type = 'torpedo_' + c.contact_type;
+    passiveContacts.unshift(c); if(passiveContacts.length>120) passiveContacts.pop();
+    console.log('Torpedo contact received:', c);
+    renderPassiveList();
+    renderTorpSonarList();
+  });
+  es.addEventListener('torpedo_ping', e=>{
+    const d=JSON.parse(e.data);
+    console.log('Received torpedo_ping event:', d);
+    const now=performance.now()/1000;
+    d.contacts.forEach(contact => {
+      console.log('Adding torpedo ping contact:', contact);
+      torpPingContacts.unshift({
+        torpedo_id: d.torpedo_id,
+        bearing: contact.bearing,
+        range: contact.range,
+        depth: contact.depth,
+        time: now
+      });
+    });
+    if(torpPingContacts.length>120) torpPingContacts.splice(120);
+    renderTorpPingList();
+  });
+}
+
+async function callFueler(){
+  const statusEl = $('fuelerStatus');
+  if(!selected){
+    if(statusEl) statusEl.textContent = 'Select a submarine first.';
+    return;
+  }
+  try{
+    const r = await fetch(`/call_fueler/${selected}`, {
+      method: 'POST',
+      headers: {...auth(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json();
+    if(!j.ok){
+      if(statusEl) statusEl.textContent = j.error || 'call failed';
+      return;
+    }
+    if(statusEl) statusEl.textContent = 'Fueler en route / on station.';
+  }catch(e){
+    if(statusEl) statusEl.textContent = 'error calling fueler';
+  }
+}
+
+/* ---------- HUD text ---------- */
+function renderMiniHUD(){
+  const s=subs.find(z=>z.id===selected);
+  if(!s){
+    $('hudMini').textContent = '—';
+  } else {
+    const fuelTxt = (s.fuel != null) ? ` | fuel ${s.fuel.toFixed(0)}` : '';
+    $('hudMini').textContent =
+      `id ${s.id.slice(0,6)} | x ${s.x.toFixed(0)} y ${s.y.toFixed(0)} | d ${s.depth.toFixed(0)}m | spd ${s.speed.toFixed(1)} | bat ${s.battery.toFixed(0)}%${fuelTxt}`;
+  }
+  // Keep torpedo ammo HUD roughly in sync with latest snapshot
+  updateTorpAmmoHUD();
+}
+
+function updateNearestFuelerRange(){
+  const el = $('nearestFuelerRange');
+  if (!el) return;
+  const sub = subs.find(s => s.id === selected);
+  if (!sub || !Array.isArray(fuelers) || fuelers.length === 0) {
+    el.textContent = '—';
+    return;
+  }
+  let best = null;
+  fuelers.forEach(f => {
+    const dx = f.x - sub.x;
+    const dy = f.y - sub.y;
+    const dz = (f.depth ?? 0) - sub.depth;
+    const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (best === null || d < best) best = d;
+  });
+  if (best === null) {
+    el.textContent = '—';
+  } else {
+    el.textContent = `${Math.round(best)} m`;
+  }
+}
+
+function updateRefuelTimerHUD(){
+  const el = $('refuelTimerHUD');
+  if (!el) return;
+  const sub = subs.find(s => s.id === selected);
+  if (!sub || !sub.refuel_active) {
+    el.textContent = '—';
+    return;
+  }
+  const total = 120.0;
+  const used = typeof sub.refuel_timer === 'number' ? sub.refuel_timer : 0.0;
+  const remaining = Math.max(0, total - used);
+  const mins = Math.floor(remaining / 60);
+  const secs = Math.floor(remaining % 60);
+  el.textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+}
+
+function toggleFuelerHold(){
+  const cb = $('fuelerHoldToggle');
+  fuelerHoldEnabled = !!cb?.checked;
+  if (fuelerHoldEnabled) {
+    if (fuelerHoldTimer) clearInterval(fuelerHoldTimer);
+    fuelerHoldTimer = setInterval(stepFuelerHold, 1000);
+  } else {
+    if (fuelerHoldTimer) {
+      clearInterval(fuelerHoldTimer);
+      fuelerHoldTimer = null;
+    }
+  }
+}
+
+async function stepFuelerHold(){
+  if (!fuelerHoldEnabled || !selected) return;
+  const sub = subs.find(s => s.id === selected);
+  if (!sub || !Array.isArray(fuelers) || fuelers.length === 0) return;
+
+  // Find nearest fueler
+  let nearest = null;
+  let best = null;
+  fuelers.forEach(f => {
+    const dx = f.x - sub.x;
+    const dy = f.y - sub.y;
+    const dz = (f.depth ?? 0) - sub.depth;
+    const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (best === null || d < best) { best = d; nearest = f; }
+  });
+  if (!nearest || best === null) return;
+
+  const targetRange = 50.0;
+  const deadband = 5.0; // +/- 5m
+
+  // Compute bearing from sub to fueler in world radians
+  const dx = nearest.x - sub.x;
+  const dy = nearest.y - sub.y;
+  let brgWorld = Math.atan2(dy, dx); // 0=east, CCW
+  // Convert to compass degrees (0°=north, clockwise) for /set_sub_heading
+  let compass = compassDeg(brgWorld);
+
+  // If we're too close, aim away instead
+  if (best < targetRange - deadband) {
+    compass = (compass + 180.0) % 360.0;
+  } else if (Math.abs(best - targetRange) <= deadband) {
+    // In band: stop adjusting heading
+    return;
+  }
+
+  // Send desired heading to server
+  try {
+    await fetch(`/set_sub_heading/${selected}`,{
+      method:'POST',
+      headers:{...auth(),'Content-Type':'application/json'},
+      body:JSON.stringify({heading_deg:compass})
+    });
+  } catch(e) {
+    console.warn('fueler hold heading error', e);
+  }
+
+  // Basic throttle logic: move when outside band, slow when near
+  let throttle = 0.2; // 20%
+  if (best > targetRange + 200.0) throttle = 0.4;
+  if (Math.abs(best - targetRange) <= deadband) throttle = 0.0;
+
+  try {
+    await fetch(`/control/${selected}`,{
+      method:'POST',
+      headers:{...auth(),'Content-Type':'application/json'},
+      body:JSON.stringify({throttle})
+    });
+  } catch(e) {
+    console.warn('fueler hold throttle error', e);
+  }
+}
+
+async function startRefueling(){
+  const statusEl = $('fuelerStatus');
+  if (!selected) {
+    if (statusEl) statusEl.textContent = 'Select a submarine first.';
+    return;
+  }
+  const sub = subs.find(s => s.id === selected);
+  if (!sub) {
+    if (statusEl) statusEl.textContent = 'Sub not found.';
+    return;
+  }
+  if (!Array.isArray(fuelers) || fuelers.length === 0) {
+    if (statusEl) statusEl.textContent = 'No fuelers on station.';
+    return;
+  }
+
+  // Check nearest fueler range
+  let nearest = null, best = null;
+  fuelers.forEach(f => {
+    const dx = f.x - sub.x;
+    const dy = f.y - sub.y;
+    const dz = (f.depth ?? 0) - sub.depth;
+    const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (best === null || d < best) { best = d; nearest = f; }
+  });
+  if (!nearest || best == null || best > 50.0) {
+    if (statusEl) statusEl.textContent = 'Need to be within 50m of a fueler to start refueling.';
+    return;
+  }
+
+  // Turn off fueler hold so we don't fight the refuel station-keeping
+  const holdCb = $('fuelerHoldToggle');
+  if (holdCb) holdCb.checked = false;
+  fuelerHoldEnabled = false;
+  if (fuelerHoldTimer) { clearInterval(fuelerHoldTimer); fuelerHoldTimer = null; }
+
+  // Ask the server to start authoritative refueling / mooring
+  try {
+    const r = await fetch(`/start_refuel/${selected}`,{
+      method:'POST',
+      headers:{...auth(),'Content-Type':'application/json'},
+      body:JSON.stringify({})
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      if (statusEl) statusEl.textContent = j.error || 'refuel start failed';
+      return;
+    }
+    if (statusEl) statusEl.textContent = 'Refueling: server holding at snorkel depth near fueler...';
+  } catch(e) {
+    console.warn('failed to start server-side refuel', e);
+    if (statusEl) statusEl.textContent = 'error starting refuel';
+  }
+}
+function renderEchoList(){
+  const now=performance.now()/1000;
+  const rows=lastEchoes
+    .filter(e=>e.observer_sub_id===selected && (now-e.time)<=ECHO_TTL)
+    .slice(0,10)
+    .map(e=>{
+      const brg=(e.bearing*180/Math.PI).toFixed(0);
+      const rng=Math.round(e.range);
+      const dep=Math.round(e.estimated_depth);
+      const q=Math.round((e.quality||0)*100);
+      return `• brg ${brg}°  r ${rng}m  depth ~${dep}m  q ${q}%`;
+    });
+  $('echoList').innerHTML = rows.join('<br>') || '—';
+}
+function renderActiveBearingList(){
+  const now=performance.now()/1000;
+  
+  // Combine active echoes and passive contacts
+  const allContacts = [];
+  
+  // Add active echoes
+  lastEchoes
+    .filter(e=>e.observer_sub_id===selected && (now-e.time)<=ECHO_TTL)
+    .forEach(e => allContacts.push({...e, source: 'echo'}));
+  
+  // Add passive contacts
+  passiveContacts
+    .filter(c=>c.observer_sub_id===selected && (now-c.time)<=PASSIVE_TTL)
+    .forEach(c => allContacts.push({...c, source: 'passive'}));
+  
+  // Sort by time (most recent first) and take first 8
+  const rows = allContacts
+    .sort((a, b) => b.time - a.time)
+    .slice(0, 8)
+    .map(contact => {
+      const brg=(contact.bearing*180/Math.PI).toFixed(0);
+      const relBrg = contact.bearing_relative ? (contact.bearing_relative*180/Math.PI).toFixed(0) : '?';
+      const direction = Math.abs(parseFloat(relBrg)) < 45 ? 'ahead' :
+                     Math.abs(parseFloat(relBrg)) > 135 ? 'astern' :
+                     parseFloat(relBrg) > 0 ? 'starboard' : 'port';
+      
+      // Determine contact type and icon
+      let contactIcon, colorDot;
+      if (contact.source === 'echo') {
+        // Active echo
+        contactIcon = contact.contact_type === 'torpedo' ? '🚀' : 
+                     contact.contact_type === 'torpedo_submarine' ? '🎯' :
+                     contact.contact_type === 'ping' ? '📡' : 
+                     contact.contact_type === 'emergency_blow' ? '💨' : '🚢';
+        colorDot = contact.contact_type === 'torpedo' ? '<span style="color:#ff4444">■</span>' :
+                  contact.contact_type === 'ping' ? '<span style="color:#44aaff">■</span>' : 
+                  '<span style="color:#ffaa33">■</span>';
+      } else {
+        // Passive contact
+        contactIcon = contact.contact_type === 'torpedo' ? '🚀' :
+                     contact.contact_type === 'torpedo_submarine' ? '🎯' :
+                     contact.contact_type === 'ping' ? '📡' :
+                     contact.contact_type === 'emergency_blow' ? '💨' : '🚢';
+        colorDot = contact.contact_type === 'torpedo' ? '<span style="color:#ff4444">■</span>' :
+                  contact.contact_type === 'ping' ? '<span style="color:#44aaff">■</span>' : 
+                  '<span style="color:#ffaa33">■</span>';
+      }
+      
+      const source = contact.source === 'echo' ? '📡' : '👂';
+      return `${source} ${contactIcon} ${colorDot} brg ${brg}° (${relBrg}° ${direction})`;
+    });
+  
+  $('activeBearingList').innerHTML = rows.join('<br>') || '—';
+}
+function renderPassiveList(){
+  const now=performance.now()/1000;
+  const list = ($('passiveMulti')?.checked ?? true)
+    ? passiveContacts.filter(c=>c.observer_sub_id===selected && (now-c.time)<=PASSIVE_TTL).slice(0,12)
+    : passiveContacts.filter(c=>c.observer_sub_id===selected && (now-c.time)<=PASSIVE_TTL).slice(0,1);
+  const rows=list.map(c=>{
+    const brg=(c.bearing*180/Math.PI).toFixed(0);
+    const relBrg = c.bearing_relative ? (c.bearing_relative*180/Math.PI).toFixed(0) : '?';
+    const contactIcon = c.contact_type === 'torpedo' ? '🚀' : 
+                       c.contact_type === 'torpedo_submarine' ? '🎯' :
+                       c.contact_type === 'ping' ? '📡' : 
+                       c.contact_type === 'emergency_blow' ? '💨' : '🚢';
+    const direction = Math.abs(parseFloat(relBrg)) < 45 ? 'ahead' :
+                     Math.abs(parseFloat(relBrg)) > 135 ? 'astern' :
+                     parseFloat(relBrg) > 0 ? 'starboard' : 'port';
+    return `${contactIcon} ${direction} ${brg}° ${c.range_class}`;
+  });
+  const passiveListElement = $('passiveList');
+  if(passiveListElement) {
+    passiveListElement.innerHTML = rows.join('<br>') || '—';
+  }
+}
+
+function renderTorpSonarList(){
+  const now=performance.now()/1000;
+  const torpContacts = passiveContacts.filter(c=>c.torpedo_id===selectedTorp && c.contact_type.startsWith('torpedo_') && (now-c.time)<=PASSIVE_TTL).slice(0,8);
+  
+  console.log('Rendering torpedo sonar list:', {
+    selectedTorp: selectedTorp,
+    totalPassiveContacts: passiveContacts.length,
+    torpedoContacts: torpContacts.length,
+    contacts: torpContacts
+  });
+  
+  const rows=torpContacts.map(c=>{
+    const relBrg = c.bearing_relative ? (c.bearing_relative*180/Math.PI).toFixed(0) : '?';
+    const contactIcon = '🎯';
+    const direction = Math.abs(parseFloat(relBrg)) < 45 ? 'ahead' :
+                     Math.abs(parseFloat(relBrg)) > 135 ? 'astern' :
+                     parseFloat(relBrg) > 0 ? 'starboard' : 'port';
+    // Approximate numeric range from range_class (server logic: short<1200, medium<3000, else long)
+    let rangeHint = '';
+    const rc = (c.range_class || '').toLowerCase();
+    if (rc === 'short') rangeHint = '<1200m';
+    else if (rc === 'medium') rangeHint = '1200–3000m';
+    else if (rc === 'long') rangeHint = '>3000m';
+    return `${contactIcon} ${direction} ${relBrg}° ${c.range_class}${rangeHint ? ' ('+rangeHint+')' : ''}`;
+  });
+  const torpSonarListElement = $('torpSonarList');
+  if(torpSonarListElement) {
+    torpSonarListElement.innerHTML = rows.join('<br>') || '—';
+  }
+}
+
+function renderTorpPingList(){
+  const now=performance.now()/1000;
+  const pingContacts = torpPingContacts.filter(c=>c.torpedo_id===selectedTorp && (now-c.time)<=PASSIVE_TTL).slice(0,8);
+  const rows=pingContacts.map(c=>{
+    const torp = torps.find(t => t.id === selectedTorp);
+    let relBrg = '?';
+    if(torp) {
+      const relativeBearing = c.bearing - torp.heading;
+      // Normalize to -180 to +180 range
+      let normalized = relativeBearing;
+      while(normalized > Math.PI) normalized -= 2 * Math.PI;
+      while(normalized < -Math.PI) normalized += 2 * Math.PI;
+      relBrg = (normalized * 180 / Math.PI).toFixed(0);
+    }
+    const rng=Math.round(c.range);
+    const dep=Math.round(c.depth);
+    return `📡 ${relBrg}° ${rng}m d${dep}m`;
+  });
+  $('torpPingList').innerHTML = rows.join('<br>') || '—';
+}
+
+function renderTorpList(){
+  const listEl = $('torpList');
+  if (!listEl) return; // sonar panel not visible / element missing
+  const selSub = subs && selected ? subs.find(s => s.id === selected) : null;
+  const rows = (torps||[]).map(t=>{
+    const hdg = (t.heading*180/Math.PI).toFixed(0);
+    const cur = (t.depth ?? 0).toFixed(0);                   // CURRENT depth
+    const tgt = (t.target_depth != null) ? `→${t.target_depth.toFixed(0)}` : '';
+    const wl  = Math.round(t.wire_length ?? 0);
+    const mode= t.mode || t.control_mode || 'wire';
+    const x   = (t.x??0).toFixed(0), y=(t.y??0).toFixed(0);
+    const batt = (t.battery != null) ? `  batt ${t.battery.toFixed(0)}%` : '';
+    let distStr = '';
+    if (selSub && typeof t.x === 'number' && typeof t.y === 'number') {
+      const dx = t.x - selSub.x;
+      const dy = t.y - selSub.y;
+      const dxy = Math.sqrt(dx*dx + dy*dy);
+      distStr = `  dist ${dxy.toFixed(0)}m`;
+    }
+    return `• ${t.id.slice(0,6)}  x ${x} y ${y}  d ${cur}m${tgt}  hdg ${hdg}°  ${mode}  range ${wl}m${distStr}${batt}`;
+  });
+  listEl.innerHTML = rows.join('<br>') || '—';
+}
+
+
+
+
+/* ---------- Map / Canvas (WORLD ROTATED so 0°=North) ---------- */
+const canvas=$('map'), ctx=canvas.getContext('2d');
+let viewport={x:0,y:0,zoom:0.15};
+const DPRatio = window.devicePixelRatio||1;
+
+function resize(){canvas.width=canvas.clientWidth*DPRatio;canvas.height=canvas.clientHeight*DPRatio;ctx.setTransform(DPRatio,0,0,DPRatio,0,0);}
+window.addEventListener('resize', resize, {passive:true}); resize();
+
+/* Direct world to screen mapping (no rotation) */
+function worldToScreen(x, y){
+  const cx = canvas.clientWidth/2, cy = canvas.clientHeight/2;
+  const dx = x - viewport.x;
+  const dy = y - viewport.y;
+  return [ cx + dx*viewport.zoom, cy - dy*viewport.zoom ];
+}
+function screenToWorld(sx, sy){
+  const cx = canvas.clientWidth/2, cy = canvas.clientHeight/2;
+  const dx = (sx - cx)/viewport.zoom;
+  const dy = (cy - sy)/viewport.zoom;
+  return [ dx + viewport.x, dy + viewport.y ];
+}
+
+function resetView(){
+  viewport.x=0; viewport.y=0;
+  viewport.zoom = Math.min(canvas.clientWidth,canvas.clientHeight)/(6000*2)*1.2;
+}
+function centerOnMe(){ const s=subs.find(z=>z.id===selected); if(!s) return; viewport.x=s.x; viewport.y=s.y; }
+function zoomMap(f){
+  const cx=canvas.clientWidth/2, cy=canvas.clientHeight/2;
+  const [wx,wy]=screenToWorld(cx,cy);
+  viewport.zoom*=f;
+  const [wx2,wy2]=screenToWorld(cx,cy);
+  viewport.x+=wx-wx2; viewport.y+=wy-wy2;
+}
+function panMap(dx,dy){ viewport.x -= dx/viewport.zoom; viewport.y += dy/viewport.zoom; }
+
+/* Grid helpers */
+function niceStep(pxPerUnit, targetPx){
+  const raw = targetPx / pxPerUnit;
+  const pow10 = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / pow10;
+  let step;
+  if (norm < 1.5) step = 1;
+  else if (norm < 3.5) step = 2;
+  else if (norm < 7.5) step = 5;
+  else step = 10;
+  return step * pow10;
+}
+function drawGrid(){
+  if(!$('showGrid').checked) return;
+  const [wx0, wy0] = screenToWorld(0, canvas.clientHeight);
+  const [wx1, wy1] = screenToWorld(canvas.clientWidth, 0);
+  const minX = Math.min(wx0, wx1), maxX = Math.max(wx0, wx1);
+  const minY = Math.min(wy0, wy1), maxY = Math.max(wy0, wy1);
+
+  const unitsPerPx = 1/viewport.zoom;
+  const majorStep = niceStep(1/unitsPerPx, 160);
+  const minorStep = majorStep/4;
+
+  // Minor grid
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(80,120,160,0.25)';
+  let startMinorX = Math.floor(minX/minorStep)*minorStep;
+  let endMinorX   = Math.ceil (maxX/minorStep)*minorStep;
+  for(let x=startMinorX; x<=endMinorX; x+=minorStep){
+    const [sx0, sy0] = worldToScreen(x, minY);
+    const [sx1, sy1] = worldToScreen(x, maxY);
+    ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx1, sy1); ctx.stroke();
+  }
+  let startMinorY = Math.floor(minY/minorStep)*minorStep;
+  let endMinorY   = Math.ceil (maxY/minorStep)*minorStep;
+  for(let y=startMinorY; y<=endMinorY; y+=minorStep){
+    const [sx0, sy0] = worldToScreen(minX, y);
+    const [sx1, sy1] = worldToScreen(maxX, y);
+    ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx1, sy1); ctx.stroke();
+  }
+
+  // Major grid
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(120,170,210,0.45)';
+  let startMajorX = Math.floor(minX/majorStep)*majorStep;
+  let endMajorX   = Math.ceil (maxX/majorStep)*majorStep;
+  for(let x=startMajorX; x<=endMajorX; x+=majorStep){
+    const [sx0, sy0] = worldToScreen(x, minY);
+    const [sx1, sy1] = worldToScreen(x, maxY);
+    ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx1, sy1); ctx.stroke();
+  }
+  let startMajorY = Math.floor(minY/majorStep)*majorStep;
+  let endMajorY   = Math.ceil (maxY/majorStep)*majorStep;
+  for(let y=startMajorY; y<=endMajorY; y+=majorStep){
+    const [sx0, sy0] = worldToScreen(minX, y);
+    const [sx1, sy1] = worldToScreen(maxX, y);
+    ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx1, sy1); ctx.stroke();
+  }
+
+  // Labels
+  if($('showGridLabels').checked){
+    ctx.fillStyle = '#9fc3e6';
+    ctx.font = '12px ui-monospace';
+    for(let x=startMajorX; x<=endMajorX; x+=majorStep){
+      const [sx, sy] = worldToScreen(x, maxY);
+      ctx.fillText(`X ${Math.round(x)}`, sx+4, sy+14);
+    }
+    for(let y=startMajorY; y<=endMajorY; y+=majorStep){
+      const [sx, sy] = worldToScreen(minX, y);
+      ctx.fillText(`Y ${Math.round(y)}`, sx+6, sy-6);
+    }
+  }
+}
+
+/* draw fan in WORLD coords */
+function drawFanWorld(cx,cy,center_world,beam_deg,range_m,color,alpha){
+  const half=(beam_deg*Math.PI/180)/2;
+  const pts=[];
+  for(let i=-half;i<=half;i+=Math.max(half/9,0.02)){
+    const a=center_world+i;
+    const wx=cx+Math.cos(a)*range_m;
+    const wy=cy+Math.sin(a)*range_m;
+    pts.push(worldToScreen(wx,wy));
+  }
+  const [sx,sy]=worldToScreen(cx,cy);
+  ctx.save();ctx.globalAlpha=alpha;ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(sx,sy);
+  pts.forEach(([px,py])=>ctx.lineTo(px,py));
+  ctx.closePath();ctx.fill();ctx.restore();
+}
+
+/* mouse drag / wheel pan-zoom / click to navigate */
+let pan=false, last=[0,0], clickStartTime=0, clickStartPos=[0,0];
+canvas.addEventListener('pointerdown',e=>{
+  pan=true; 
+  last=[e.clientX,e.clientY]; 
+  clickStartTime=Date.now();
+  clickStartPos=[e.clientX,e.clientY];
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove',e=>{ 
+  if(!pan) return; 
+  const dx=e.clientX-last[0], dy=e.clientY-last[1]; 
+  panMap(dx,dy); 
+  last=[e.clientX,e.clientY];
+});
+canvas.addEventListener('pointerup',e=>{
+  pan=false;
+  // Check if this was a click (not a drag) and we have a selected submarine
+  let clickDuration = Date.now() - clickStartTime;
+  let clickDistance = Math.sqrt((e.clientX - clickStartPos[0])**2 + (e.clientY - clickStartPos[1])**2);
+  
+  if (clickDuration < 200 && clickDistance < 10 && selected) {
+    // Convert screen coordinates to world coordinates
+    let [worldX, worldY] = screenToWorld(e.offsetX, e.offsetY);
+    
+    // Get submarine position
+    let sub = subs.find(s => s.id === selected);
+    if (sub) {
+      // Calculate bearing from submarine to click point
+      let dx = worldX - sub.x;
+      let dy = worldY - sub.y;
+      let bearing = Math.atan2(dy, dx);
+      
+      // Convert bearing to compass degrees (0°=North, 90°=East, etc.)
+      let compassBearing = (90 - bearing * 180 / Math.PI) % 360;
+      if (compassBearing < 0) compassBearing += 360;
+      
+      // Debug logging
+      console.log(`Click navigation: screen(${e.offsetX}, ${e.offsetY}) -> world(${worldX.toFixed(1)}, ${worldY.toFixed(1)})`);
+      console.log(`Sub position: (${sub.x.toFixed(1)}, ${sub.y.toFixed(1)})`);
+      console.log(`Bearing: ${(bearing * 180 / Math.PI).toFixed(1)}° -> Compass: ${compassBearing.toFixed(1)}°`);
+      
+      // Set submarine heading to face the clicked point
+      setHeading(compassBearing);
+    }
+  }
+});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const factor=Math.exp(-e.deltaY*0.001);
+  const [wx,wy]=screenToWorld(e.offsetX,e.offsetY);
+  viewport.zoom*=factor;
+  const [wx2,wy2]=screenToWorld(e.offsetX,e.offsetY);
+  viewport.x+=wx-wx2; viewport.y+=wy-wy2;
+},{passive:false});
+
+function draw(){
+  ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+  $('zoomRead').textContent = viewport.zoom.toFixed(2);
+
+  drawGrid(); // grid first
+
+  // arena ring (world radius 6000)
+  ctx.strokeStyle='#1a314b'; ctx.lineWidth=2;
+  const [rx,ry]=worldToScreen(0,0); ctx.beginPath(); ctx.arc(rx,ry,6000*viewport.zoom,0,Math.PI*2); ctx.stroke();
+
+  // subs (bow points true direction, world rotated projection)
+  subs.forEach(s=>{
+    const [sx,sy]=worldToScreen(s.x,s.y);
+    ctx.save(); ctx.translate(sx,sy);
+    ctx.rotate(-s.heading);  // 0°=North (compass heading)
+    ctx.fillStyle=(s.id===selected)?'#5fd9ff':'#6c7f94';
+    ctx.beginPath(); ctx.moveTo(12,0); ctx.lineTo(-10,6); ctx.lineTo(-10,-6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // label with depth and coordinates
+    ctx.fillStyle='#a8bfd6'; ctx.font='12px ui-monospace';
+    ctx.fillText(`${s.id.slice(0,4)} d:${s.depth.toFixed(0)} x:${s.x.toFixed(0)} y:${s.y.toFixed(0)}`, sx+10, sy-10);
+  });
+
+  // Weather scanner detections (plot as cyan circles / arcs)
+  if (typeof weatherDetections !== 'undefined' && weatherDetections.length) {
+    const nowScan = performance.now()/1000;
+    const MAX_AGE = 20; // seconds
+    weatherDetections = weatherDetections.filter(d => (nowScan - d.time) <= MAX_AGE);
+    ctx.save();
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    weatherDetections.forEach(d => {
+      const [cx, cy] = worldToScreen(d.x, d.y);
+      const r = d.radius * viewport.zoom;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.stroke();
+      // Label with matching index from the list (#1, #2, ...)
+      if (d.index != null) {
+        ctx.setLineDash([]);
+        ctx.font = '11px ui-monospace';
+        ctx.fillStyle = '#00e5ff';
+        ctx.textAlign = 'center';
+        ctx.fillText(`#${d.index}`, cx, cy);
+        ctx.setLineDash([4, 4]);
+      }
+    });
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Fuelers (global, visible to everyone)
+  if (Array.isArray(fuelers) && fuelers.length) {
+    ctx.save();
+    fuelers.forEach(f => {
+      const [fx, fy] = worldToScreen(f.x, f.y);
+      ctx.fillStyle = '#00ff88';
+      ctx.beginPath(); ctx.arc(fx, fy, 5, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#003322'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(fx, fy, 7, 0, Math.PI*2); ctx.stroke();
+
+      ctx.fillStyle = '#b0ffd0';
+      ctx.font = '11px ui-monospace';
+      const fuelPct = f.max_fuel > 0 ? (100.0 * f.fuel / f.max_fuel) : 0;
+      ctx.fillText(`FUELER ${Math.round(fuelPct)}%`, fx+8, fy-8);
+    });
+    ctx.restore();
+  }
+
+
+// torpedoes + labels (show current and target if available)
+torps.forEach(t=>{
+  const [tx,ty] = worldToScreen(t.x, t.y);
+
+  // pick CURRENT depth (prefer current_depth, else depth)
+  const cur = (t.current_depth != null ? t.current_depth : t.depth) ?? 0;
+  const tgt = (t.target_depth != null ? t.target_depth : null);
+
+  ctx.fillStyle = '#ffbb33';
+  ctx.beginPath(); ctx.arc(tx,ty,4,0,Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#ffd28a';
+  ctx.font = '12px ui-monospace';
+  let label = `d:${cur.toFixed(0)}m`;
+  if (tgt != null && Math.abs(tgt - cur) > 0.5) {
+    label += `→${tgt.toFixed(0)}`;   // show target if different
+  }
+  label += ` x:${(t.x??0).toFixed(0)} y:${(t.y??0).toFixed(0)}`;
+  ctx.fillText(label, tx+6, ty-6);
+});
+
+// torpedo sonar contacts for all owned torpedoes
+if($('showEchoes')?.checked){
+  const now=performance.now()/1000;
+  const myTorps = torps.filter(t => subs.some(s => s.id === selected && s.owner_id)); // torpedoes from my subs
+  
+  myTorps.forEach(torp => {
+    // Active ping contacts (green circles)
+    const pingContacts = torpPingContacts.filter(c=>c.torpedo_id===torp.id && (now-c.time)<=PASSIVE_TTL);
+    pingContacts.forEach(contact => {
+      const contactX = torp.x + Math.cos(contact.bearing) * contact.range;
+      const contactY = torp.y + Math.sin(contact.bearing) * contact.range;
+      const [cx, cy] = worldToScreen(contactX, contactY);
+      
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.stroke();
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px ui-monospace';
+      ctx.fillText(`${Math.round(contact.range)}m`, cx+8, cy-8);
+    });
+    
+    // Passive sonar contacts (orange bearing lines)
+    const passiveContacts = passiveContacts.filter(c=>c.torpedo_id===torp.id && c.contact_type.startsWith('torpedo_') && (now-c.time)<=PASSIVE_TTL);
+    passiveContacts.forEach(contact => {
+      const [tx, ty] = worldToScreen(torp.x, torp.y);
+      const endX = torp.x + Math.cos(contact.bearing) * 2000;
+      const endY = torp.y + Math.sin(contact.bearing) * 2000;
+      const [ex, ey] = worldToScreen(endX, endY);
+      
+      ctx.strokeStyle = '#ffaa00';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+  });
+}
+
+
+
+  // active echoes & beam
+  const now=performance.now()/1000;
+  if(selected && $('showEchoes').checked){
+    const me=subs.find(z=>z.id===selected);
+    if(me){
+      const beam=parseFloat($('pingBeam').value||'25');
+      const brg=parseFloat($('pingBearing').value||'0');
+      const maxR=parseFloat($('pingRange').value||'4000');
+      const centerWorld = me.heading + (brg*Math.PI/180);
+      drawFanWorld(me.x, me.y, centerWorld, beam, maxR, '#4dd9ff', 0.12);
+
+      lastEchoes.forEach(e=>{
+        if(e.observer_sub_id!==selected) return;
+        const age=now-e.time; if(age>ECHO_TTL) return;
+        const alpha=Math.max(0.15,1-age/ECHO_TTL)*(e.quality??1);
+        const wx=me.x + Math.cos(e.bearing)*e.range;
+        const wy=me.y + Math.sin(e.bearing)*e.range;
+        const [ex,ey]=worldToScreen(wx,wy);
+        ctx.save(); ctx.globalAlpha=alpha; ctx.fillStyle='#4dd9ff';
+        ctx.beginPath(); ctx.arc(ex,ey,5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#cfe3f5'; ctx.font='12px ui-monospace';
+        ctx.fillText(`${Math.round(e.range)}m ~${Math.round(e.estimated_depth)}m`, ex+8, ey-8);
+        ctx.restore();
+      });
+    }
+  }
+
+  // passive bearings
+  if(selected){
+    const me=subs.find(z=>z.id===selected);
+    if(me){
+      const multi = $('passiveMulti')?.checked ?? true;
+      const recent = passiveContacts.filter(p=>p.observer_sub_id===selected && (now-p.time)<=PASSIVE_TTL);
+      const list = multi ? recent : recent.slice(0,1);
+      const [sx,sy]=worldToScreen(me.x,me.y);
+      list.forEach(p=>{
+        const len = (p.range_class==='short'?1200:p.range_class==='medium'?2400:4000);
+        const wx = me.x + Math.cos(p.bearing)*len;
+        const wy = me.y + Math.sin(p.bearing)*len;
+        const [ex,ey]=worldToScreen(wx,wy);
+        const age=now-p.time, alpha=Math.max(0.2,1-age/PASSIVE_TTL);
+        
+        // Different colors for different contact types
+        let color = '#ffaa33'; // default submarine
+        if(p.contact_type === 'torpedo') color = '#ff4444';
+        if(p.contact_type === 'ping') color = '#44ff44';
+        if(p.contact_type === 'emergency_blow') color = '#ff8800';
+        
+        ctx.save(); ctx.globalAlpha=alpha; ctx.strokeStyle=color; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke(); ctx.restore();
+      });
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+resetView(); requestAnimationFrame(draw);
+
+/* ---------- Periodic HUD ---------- */
+setInterval(()=>{
+  const s=subs.find(z=>z.id===selected);
+  if(!s){ $('hud').innerHTML='—'; $('hudMini').textContent='—'; return; }
+  $('hud').innerHTML =
+    `id <kbd>${s.id.slice(0,8)}</kbd><br>`+
+    `pos X ${s.x.toFixed(1)} m  Y ${s.y.toFixed(1)} m<br>`+
+    `depth ${s.depth.toFixed(1)} m | target ${s.target_depth==null?'—':s.target_depth.toFixed(0)} m<br>`+
+    `heading ${compassDeg(s.heading).toFixed(0)}°${s.target_heading ? ` → ${compassDeg(s.target_heading).toFixed(0)}°` : ''} | pitch ${(s.pitch*180/Math.PI).toFixed(1)}° | rudder ${(s.rudder_angle*180/Math.PI).toFixed(1)}°<br>`+
+    `speed ${s.speed.toFixed(2)} m/s | throttle ${(s.throttle*100).toFixed(0)}%<br>`+
+    `battery ${s.battery.toFixed(1)}% | fuel ${s.fuel != null ? s.fuel.toFixed(0) : '—'} | snorkel ${s.is_snorkeling?'ON':'off'} | blow ${Math.round(s.blow_charge*100)}%<br>`+
+    `torpedoes ${s.torpedo_ammo != null ? s.torpedo_ammo : '—'} | kills ${s.kills != null ? s.kills : 0} | score ${s.score != null ? s.score.toFixed(0) : 0}<br>`+
+    `health ${s.health.toFixed(0)}%`;
+  renderMiniHUD();
+
+  // Update ping battery cost
+  const pingBeam = parseFloat($('pingBeam')?.value || '25');
+  const pingRange = parseFloat($('pingRange')?.value || '4000');
+  const pingCost = 0.5 + (pingBeam * 0.04) + ((pingRange / 100) * 0.2683);
+  if($('pingBatteryCost')) $('pingBatteryCost').textContent = pingCost.toFixed(1);
+}, 1000);
+
+// Update ping battery cost when inputs change
+function updatePingBatteryCost() {
+  const pingBeam = parseFloat($('pingBeam')?.value || '25');
+  const pingRange = parseFloat($('pingRange')?.value || '4000');
+  const pingCost = 0.5 + (pingBeam * 0.04) + ((pingRange / 100) * 0.2683);
+  if($('pingBatteryCost')) $('pingBatteryCost').textContent = pingCost.toFixed(1);
+}
+
+// Update torpedo battery cost when inputs change
+
+$('pingBeam')?.addEventListener('input', updatePingBatteryCost);
+$('pingRange')?.addEventListener('input', updatePingBatteryCost);
+
+// Calculate initial battery costs on page load
+updatePingBatteryCost();
+</script>
+</body>
+</html>
+

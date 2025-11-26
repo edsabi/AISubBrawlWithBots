@@ -1,0 +1,9 @@
+{
+  "formation_spacing_m": 200.0,
+  "default_throttle": 0.4,
+  "cruise_depth_m": 80.0,
+  "posture": "balanced",      // "ultra_quiet", "balanced", or "aggressive"
+  "auto_fire": true           // if false, brain will not launch torpedoes
+}
+
+

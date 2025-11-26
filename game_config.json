@@ -1,0 +1,143 @@
+{
+  "tick_hz": 10,
+
+  "world": {
+    "ring": { "x": 0.0, "y": 0.0, "r": 6000.0 },
+    "spawn_min_r": 500.0,
+    "spawn_max_r": 4500.0,
+    "safe_spawn_separation": 800.0,
+
+    "weather": {
+      "storm_damage_dps": 4.0,
+      "sonar_attenuation_db": 3.0,
+      "cloud_close_hear_range_m": 400.0,
+
+      "clouds": {
+        "count": 40,
+        "min_r": 6500.0,
+        "max_r": 9500.0,
+        "min_radius": 400.0,
+        "max_radius": 1200.0,
+        "min_depth": 0.0,
+        "max_depth": 350.0,
+        "min_thickness": 60.0,
+        "max_thickness": 200.0,
+        "attenuation_db": 8.0,
+        "damage_dps": 2.0,
+        "max_count_factor": 4.0,
+        "local_spawn": {
+          "enabled": true,
+          "far_margin_m": 2000.0,
+          "inner_offset_m": 2000.0,
+          "outer_offset_m": 6000.0,
+          "min_local_clouds": 40,
+          "ttl_s": 900.0
+        }
+      },
+
+      "scanner": {
+        "max_range_m": 3000.0,
+        "battery_cost": 3.0,
+        "rng_sigma_m": 40.0,
+        "brg_sigma_deg": 5.0,
+        "noise_duration_s": 8.0
+      }
+    }
+  },
+
+  "sub": {
+    "max_speed": 12.0,
+    "acceleration": 2.0,
+    "yaw_rate_deg_s": 20.0,
+    "pitch_rate_deg_s": 12.0,
+    "planes_effect": 1.0,
+    "neutral_bias": 0.008,
+    "depth_damping": 0.35,
+    "snorkel_depth": 15.0,
+    "snorkel_off_hysteresis": 2.0,
+    "max_per_user": 2,
+    "respawn_cooldown_s": 7200.0,
+
+    "emergency_blow": {
+      "duration_s": 60.0,
+      "upward_mps": 12.0,
+      "recharge_per_s_at_snorkel": 0.02,
+      "cooldown_s": 0.0
+    },
+
+    "battery": {
+      "initial_min": 40.0,
+      "initial_max": 80.0,
+      "drain_per_throttle_per_s": 0.05,
+      "high_speed_multiplier": 15.0,
+      "recharge_per_s_snorkel": 1,
+      "refuel_rate_per_s": 3.333
+    },
+
+    "crush_depth": 500.0,
+    "crush_dps_per_100m": 30.0
+  },
+
+  "torpedo": {
+    "speed": 6.0,
+    "min_speed": 8.0,
+    "max_speed": 24.0,
+    "turn_rate_deg_s": 22.0,
+    "depth_rate_m_s": 6.0,
+    "blast_radius": 120.0,
+    "lifetime_s": 240.0,
+    "max_range": 6000.0,
+    "battery_cost_per_100m": 0.0,
+    "proximity_fuze_m": 30.0,
+    "arming_delay_s": 10.0,
+    "magazine_size": 4,
+    "reload_battery_cost_per_torp": 10.0,
+    "battery": {
+      "capacity": 100.0,
+      "drain_per_mps_per_s": 0.0015,
+      "active_ping_cost": 2.0,
+      "min_for_ping": 5.0
+    },
+    "sonar": {
+      "passive": {
+        "base_snr": 6.0,
+        "speed_noise_gain": 0.8,
+        "max_range": 2000.0,
+        "bearing_jitter_deg": 5.0,
+        "report_interval_s": [1.0, 2.0]
+      },
+      "active": {
+        "max_range": 1500.0,
+        "max_angle": 60.0,
+        "sound_speed": 1500.0,
+        "rng_sigma_m": 20.0,
+        "brg_sigma_deg": 2.0,
+        "battery_cost": 0.5
+      }
+    }
+  },
+
+  "sonar": {
+    "passive": {
+      "base_snr": 8.0,
+      "speed_noise_gain": 0.6,
+      "snorkel_bonus": 15.0,
+        "scanner_noise_bonus_db": 8.0,
+      "bearing_jitter_deg": 3.0,
+      "report_interval_s": [2.0, 4.0]
+    },
+    "active": {
+      "max_range": 6000.0,
+      "max_angle": 210.0,
+      "sound_speed": 1500.0,
+      "rng_sigma_m": 40.0,
+      "brg_sigma_deg": 1.5
+    },
+    "active_power": {
+      "base_cost": 0.5,
+      "cost_per_degree": 0.04,
+      "cost_per_100m_range": 0.2683,
+      "min_battery": 5.0
+    }
+  }
+}

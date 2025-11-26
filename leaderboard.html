@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+  <title>Sub Brawl Leaderboard</title>
+  <style>
+    body{margin:0;background:#020b16;color:#d8e4ee;font-family:ui-monospace,monospace;display:flex;flex-direction:column;min-height:100vh}
+    header{background:#041120;padding:8px 10px;display:flex;justify-content:space-between;align-items:center}
+    .btn{height:32px;border-radius:7px;border:1px solid #2c3f57;background:#123a66;color:#fff;padding:0 10px;cursor:pointer}
+    main{flex:1;padding:12px;background:#071425}
+    .section{background:#0c1a2b;border:1px solid #163150;border-radius:10px;padding:12px;max-width:640px;margin:0 auto}
+    .label{color:#8ea3b7;font-size:.9em;margin-bottom:6px}
+    .row{margin:4px 0;font-size:.9em}
+    .small{font-size:.8em;color:#8ea3b7;margin-top:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <div style="font-weight:bold;">Sub Brawl – Leaderboard</div>
+    <button class="btn" onclick="window.location.href='/'">Back to Command</button>
+  </header>
+  <main>
+    <div class="section">
+      <div class="label">Top players</div>
+      <div id="leaderboardList">Loading…</div>
+      <div class="small">Scores are based on survival time with a multiplier that increases with kills.</div>
+    </div>
+  </main>
+  <script>
+    async function loadBoard(){
+      const el = document.getElementById('leaderboardList');
+      try{
+        const r = await fetch('/leaderboard');
+        const j = await r.json();
+        if(!j.ok) throw new Error(j.error||'failed');
+        const rows = j.leaders || [];
+        if(!rows.length){
+          el.textContent = 'No players yet.';
+          return;
+        }
+        el.innerHTML = rows.map(row=>{
+          const name  = row.username || ('user:'+row.user_id);
+          const score = (row.score ?? 0).toFixed(0);
+          const kills = row.kills ?? 0;
+          const subs  = row.subs ?? 0;
+          return `<div class="row">#${row.rank} — <b>${name}</b> | score ${score} | kills ${kills} | subs ${subs}</div>`;
+        }).join('');
+      }catch(e){
+        el.textContent = 'Error loading leaderboard.';
+      }
+    }
+    loadBoard();
+    setInterval(loadBoard, 5000);
+  </script>
+</body>
+</html>
+
+
